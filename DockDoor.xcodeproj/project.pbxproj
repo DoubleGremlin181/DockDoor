@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		EE6D378B10134DEDA83A13F4 /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADDE72D517BF4535A016BA0A /* ShortcutRecorder.swift */; };
 		431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */; };
 		FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */; };
 		894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */; };
+		83A8FD13D33D4A2EBD7424BC /* KeybindConflicts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */; };
 		083B8C48914A88BF8AA0C79D /* SwitcherScreenPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */; };
 		0531F8D22C3CC04600327808 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */; };
 		0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0596C2C22C3E060D00DCABEF /* PrivateApis.swift */; };
@@ -242,9 +244,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		ADDE72D517BF4535A016BA0A /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
 		45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacementTests.swift; sourceTree = "<group>"; };
 		73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngineTests.swift; sourceTree = "<group>"; };
 		3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherDisplayOrderTests.swift; sourceTree = "<group>"; };
+		71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeybindConflicts.swift; sourceTree = "<group>"; };
 		A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacement.swift; sourceTree = "<group>"; };
 		033B1F63CB464113ADA3868696F486CF /* WindowlessAppPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowlessAppPreview.swift; sourceTree = "<group>"; };
 		0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
@@ -741,7 +745,9 @@
 				BB157B7F2C0E8E6700997315 /* MessageUtil.swift */,
 				BB157B812C0EB29E00997315 /* DockObserver.swift */,
 				BBF6C6232C1B4B4400BF1D40 /* KeybindHelper.swift */,
+				71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */,
 				A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */,
+				ADDE72D517BF4535A016BA0A /* ShortcutRecorder.swift */,
 				BBF6C6262C1B4B4500BF1D40 /* StringMatchingUtil.swift */,
 				BB1CBD5C2C1BCA4F003969BC /* Misc Utils.swift */,
 				F098F8107F464776B5C18294427CAECD /* ScriptCommands.swift */,
@@ -1249,7 +1255,9 @@
 				BBA153FC2C12356100119C02 /* main.swift in Sources */,
 				BBC57AA82E3A6BED0078B262 /* DynamicWindowFrameModifier.swift in Sources */,
 				BBF6C6242C1B4B4400BF1D40 /* KeybindHelper.swift in Sources */,
+				83A8FD13D33D4A2EBD7424BC /* KeybindConflicts.swift in Sources */,
 				083B8C48914A88BF8AA0C79D /* SwitcherScreenPlacement.swift in Sources */,
+				EE6D378B10134DEDA83A13F4 /* ShortcutRecorder.swift in Sources */,
 				BBF6C6252C1B4B4500BF1D40 /* StringMatchingUtil.swift in Sources */,
 				BB638F1C2E0218D10010077D /* CalendarFullView.swift in Sources */,
 				0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */,
