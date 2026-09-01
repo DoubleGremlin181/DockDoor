@@ -121,9 +121,32 @@ typealias SLPSPostEventRecordToType = @convention(c) (
     UnsafeMutablePointer<UInt8>
 ) -> CGError
 
+typealias SLSManagedDisplaySetCurrentSpaceType = @convention(c) (
+    CGSConnectionID,
+    CFString,
+    CGSSpaceID
+) -> Void
+
+typealias SLSManagedDisplayIsAnimatingType = @convention(c) (
+    CGSConnectionID,
+    CFString
+) -> Bool
+
+typealias SLSCopyWindowsWithOptionsAndTagsType = @convention(c) (
+    CGSConnectionID,
+    UInt32,
+    CFArray,
+    UInt32,
+    UnsafeMutablePointer<UInt64>,
+    UnsafeMutablePointer<UInt64>
+) -> Unmanaged<CFArray>?
+
 private var skyLightHandle: UnsafeMutableRawPointer?
 private var setFrontProcessPtr: SLPSSetFrontProcessWithOptionsType?
 private var postEventRecordPtr: SLPSPostEventRecordToType?
+private var managedDisplaySetCurrentSpacePtr: SLSManagedDisplaySetCurrentSpaceType?
+private var managedDisplayIsAnimatingPtr: SLSManagedDisplayIsAnimatingType?
+private var copyWindowsWithOptionsPtr: SLSCopyWindowsWithOptionsAndTagsType?
 
 private func loadSkyLightFunctions() {
     guard skyLightHandle == nil else { return }
@@ -143,6 +166,37 @@ private func loadSkyLightFunctions() {
     if let symbol = dlsym(handle, "SLPSPostEventRecordTo") {
         postEventRecordPtr = unsafeBitCast(symbol, to: SLPSPostEventRecordToType.self)
     }
+
+    if let symbol = dlsym(handle, "SLSManagedDisplaySetCurrentSpace") {
+        managedDisplaySetCurrentSpacePtr = unsafeBitCast(symbol, to: SLSManagedDisplaySetCurrentSpaceType.self)
+    }
+
+    if let symbol = dlsym(handle, "SLSManagedDisplayIsAnimating") {
+        managedDisplayIsAnimatingPtr = unsafeBitCast(symbol, to: SLSManagedDisplayIsAnimatingType.self)
+    }
+
+    if let symbol = dlsym(handle, "SLSCopyWindowsWithOptionsAndTags") {
+        copyWindowsWithOptionsPtr = unsafeBitCast(symbol, to: SLSCopyWindowsWithOptionsAndTagsType.self)
+    }
+}
+
+/// Windows belonging to the given space — works for non-current spaces, unlike
+/// CGSCopySpacesForWindows on modern macOS. Empty when the symbol is missing.
+func CGSCopyWindowsForSpace(_ cid: CGSConnectionID, _ spaceID: CGSSpaceID) -> [CGWindowID] {
+    loadSkyLightFunctions()
+    guard let fn = copyWindowsWithOptionsPtr else { return [] }
+    var setTags: UInt64 = 0
+    var clearTags: UInt64 = 0
+    let spaces = [NSNumber(value: spaceID)] as CFArray
+    let result = fn(cid, 0, spaces, 0x2, &setTags, &clearTags)?.takeRetainedValue() as? [NSNumber]
+    return result?.map { CGWindowID($0.uint32Value) } ?? []
+}
+
+/// Whether the display is mid space-transition animation; false when the symbol is unavailable.
+func CGSManagedDisplayIsAnimating(_ cid: CGSConnectionID, _ displayIdentifier: String) -> Bool {
+    loadSkyLightFunctions()
+    guard let fn = managedDisplayIsAnimatingPtr else { return false }
+    return fn(cid, displayIdentifier as CFString)
 }
 
 func _SLPSSetFrontProcessWithOptions(_ psn: UnsafeMutablePointer<ProcessSerialNumber>, _ wid: CGWindowID, _ mode: SLPSMode.RawValue) -> CGError {
@@ -155,6 +209,19 @@ func SLPSPostEventRecordTo(_ psn: UnsafeMutablePointer<ProcessSerialNumber>, _ b
     loadSkyLightFunctions()
     guard let fn = postEventRecordPtr else { return CGError(rawValue: -1)! }
     return fn(psn, bytes)
+}
+
+/// Switches the given display to the given managed space. Symbol resolved lazily;
+/// returns false when unavailable so callers can degrade gracefully.
+@discardableResult
+func CGSManagedDisplaySetCurrentSpace(_ cid: CGSConnectionID, _ displayIdentifier: String, _ spaceID: CGSSpaceID) -> Bool {
+    loadSkyLightFunctions()
+    guard let fn = managedDisplaySetCurrentSpacePtr else {
+        DebugLogger.log("CGSManagedDisplaySetCurrentSpace", details: "Symbol unavailable")
+        return false
+    }
+    fn(cid, displayIdentifier as CFString, spaceID)
+    return true
 }
 
 func SLSMoveWindowsToManagedSpace(_ windowIDs: [CGWindowID], _ spaceID: CGSSpaceID) -> Bool {
