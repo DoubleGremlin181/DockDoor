@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */; };
+		FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */; };
 		894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */; };
 		083B8C48914A88BF8AA0C79D /* SwitcherScreenPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */; };
 		0531F8D22C3CC04600327808 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */; };
@@ -102,6 +103,7 @@
 		BB1F60E52D238A9800808E05 /* CGSize.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1F60E42D238A9700808E05 /* CGSize.swift */; };
 		BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */; };
 		3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */; };
+		E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */; };
 		BB2106762E834F25002F87D6 /* CmdTabFocusFullOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106752E834F25002F87D6 /* CmdTabFocusFullOverlayView.swift */; };
 		BB2106782E834F46002F87D6 /* KeyHintRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106772E834F46002F87D6 /* KeyHintRow.swift */; };
 		BB21067D2E83565A002F87D6 /* KeyboardLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB21067C2E83565A002F87D6 /* KeyboardLabel.swift */; };
@@ -241,6 +243,7 @@
 
 /* Begin PBXFileReference section */
 		45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacementTests.swift; sourceTree = "<group>"; };
+		73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngineTests.swift; sourceTree = "<group>"; };
 		3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherDisplayOrderTests.swift; sourceTree = "<group>"; };
 		A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacement.swift; sourceTree = "<group>"; };
 		033B1F63CB464113ADA3868696F486CF /* WindowlessAppPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowlessAppPreview.swift; sourceTree = "<group>"; };
@@ -337,6 +340,7 @@
 		BB1F60E42D238A9700808E05 /* CGSize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGSize.swift; sourceTree = "<group>"; };
 		BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDiscoveryShared.swift; sourceTree = "<group>"; };
 		E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceInfo.swift; sourceTree = "<group>"; };
+		686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngine.swift; sourceTree = "<group>"; };
 		BB2106752E834F25002F87D6 /* CmdTabFocusFullOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmdTabFocusFullOverlayView.swift; sourceTree = "<group>"; };
 		BB2106772E834F46002F87D6 /* KeyHintRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyHintRow.swift; sourceTree = "<group>"; };
 		BB21067C2E83565A002F87D6 /* KeyboardLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLabel.swift; sourceTree = "<group>"; };
@@ -621,6 +625,7 @@
 			children = (
 				AA11001122334455AA110055 /* DockLockerGeometryTests.swift */,
 				45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */,
+				73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */,
 				3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */,
 				D00D4B366E3CF5338182E065 /* NativeTabGroupingTests.swift */,
 			);
@@ -921,6 +926,7 @@
 				341691A92EE37A6D004AFFC9 /* LiveWindowCapture.swift */,
 				BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */,
 				E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */,
+				686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */,
 				BB49747C2E81CE5100308326 /* WindowSeeder.swift */,
 				BB49747D2F01AB0100308326 /* WindowOrderPersistence.swift */,
 				BBB023AC2EDCCB9100317CF4 /* WindowInfo.swift */,
@@ -1122,6 +1128,7 @@
 			files = (
 				AA11001122334455AA110066 /* DockLockerGeometryTests.swift in Sources */,
 				431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */,
+				FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */,
 				894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */,
 				555110B7F7B99C7BD510DBC7 /* NativeTabGroupingTests.swift in Sources */,
 			);
@@ -1228,6 +1235,7 @@
 				BB15E1F72C8FC05A002ECFB9 /* UniformCardView.swift in Sources */,
 				BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */,
 				3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */,
+				E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */,
 				BB638F042E0217030010077D /* MediaControlButtonRow.swift in Sources */,
 				BB377C492DFD434300FA93DA /* GlobalPadding.swift in Sources */,
 				BB638F162E0218C00010077D /* SharedHoverUtils.swift in Sources */,

@@ -448,6 +448,25 @@ extension WindowUtil {
         }
     }
 
+    /// Store a freshly captured full-resolution image on a cached window so
+    /// dock previews and the next switcher open seed from it instead of an
+    /// older frame. Pass the capture before any thumbnail downsampling —
+    /// dock previews render larger than switcher tiles.
+    static func storeRefreshedWindowImage(_ image: CGImage, windowID: CGWindowID, pid: pid_t) {
+        guard image.width >= minUsableImageDimension, image.height >= minUsableImageDimension else { return }
+        // updateCache writes the (possibly untouched) set back unconditionally,
+        // which would create an empty entry for a pid the cache never held.
+        guard desktopSpaceWindowCacheManager.readCache(pid: pid).contains(where: { $0.id == windowID }) else { return }
+        desktopSpaceWindowCacheManager.updateCache(pid: pid) { windowSet in
+            guard let existingIndex = windowSet.firstIndex(where: { $0.id == windowID }) else { return }
+            var updatedWindow = windowSet[existingIndex]
+            updatedWindow.image = image
+            updatedWindow.imageCapturedTime = Date()
+            windowSet.remove(at: existingIndex)
+            windowSet.insert(updatedWindow)
+        }
+    }
+
     @discardableResult
     static func moveWindowToCurrentManagedSpace(_ windowInfo: WindowInfo, mouseLocation: CGPoint = NSEvent.mouseLocation) -> Bool {
         guard !windowInfo.isWindowlessApp,
@@ -1282,7 +1301,9 @@ extension WindowUtil {
         updateDesktopSpaceWindowCache(with: info)
     }
 
-    private static let minUsableImageDimension = 10
+    /// Captures narrower/shorter than this are window-server garbage (corrupt
+    /// backing stores return 1-2px slivers); callers keep the previous image.
+    static let minUsableImageDimension = 10
 
     private static func preferredCachedWindow(_ first: WindowInfo, _ second: WindowInfo) -> WindowInfo {
         if first.scWindow == nil, second.scWindow != nil { return second }
