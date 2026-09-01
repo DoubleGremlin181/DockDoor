@@ -3,16 +3,36 @@ import Cocoa
 import Defaults
 import ScreenCaptureKit
 
-// Minimal provider used when we only have a CGWindowID (no SCWindow available)
+/// Minimal provider used when we only have a CGWindowID (no SCWindow available)
 struct AXFallbackProvider: WindowPropertiesProviding {
     let cgID: CGWindowID
-    var windowID: CGWindowID { cgID }
-    var frame: CGRect { .zero }
-    var title: String? { nil }
-    var owningApplicationBundleIdentifier: String? { nil }
-    var owningApplicationProcessID: pid_t? { nil }
-    var isOnScreen: Bool { true }
-    var windowLayer: Int { 0 }
+    var windowID: CGWindowID {
+        cgID
+    }
+
+    var frame: CGRect {
+        .zero
+    }
+
+    var title: String? {
+        nil
+    }
+
+    var owningApplicationBundleIdentifier: String? {
+        nil
+    }
+
+    var owningApplicationProcessID: pid_t? {
+        nil
+    }
+
+    var isOnScreen: Bool {
+        true
+    }
+
+    var windowLayer: Int {
+        0
+    }
 }
 
 struct WindowCandidateAttributes {
@@ -117,8 +137,12 @@ enum WindowOwnerResolver {
 
     private static func displayAppScore(_ displayApp: NSRunningApplication, forOwner owner: NSRunningApplication) -> Int {
         var score = 0
-        if owner.processIdentifier == displayApp.processIdentifier { score += 100 }
-        if owner.bundleIdentifier == displayApp.bundleIdentifier { score += 80 }
+        if owner.processIdentifier == displayApp.processIdentifier {
+            score += 100
+        }
+        if owner.bundleIdentifier == displayApp.bundleIdentifier {
+            score += 80
+        }
         if let ownerBundle = owner.bundleIdentifier,
            let displayBundle = displayApp.bundleIdentifier,
            ownerBundle.hasPrefix(displayBundle + ".")
@@ -128,7 +152,9 @@ enum WindowOwnerResolver {
         } else if helperBundleBelongsToDisplayApp(owner.bundleIdentifier, displayApp.bundleIdentifier) {
             score += 50
         }
-        if executableRootsMatch(owner: owner, displayApp: displayApp) { score += 10 }
+        if executableRootsMatch(owner: owner, displayApp: displayApp) {
+            score += 10
+        }
         return score
     }
 }
@@ -142,7 +168,9 @@ enum WindowCandidateDiscriminator {
 
     static func hasUsableSize(_ size: CGSize?) -> Bool {
         guard let size, size.width > 0, size.height > 0 else { return false }
-        if Defaults[.disableMinWindowSizeFilter] { return true }
+        if Defaults[.disableMinWindowSizeFilter] {
+            return true
+        }
         return size.width >= minimumSize.width && size.height >= minimumSize.height
     }
 
@@ -369,7 +397,9 @@ func mapAXToCG(attributes: WindowCandidateAttributes, candidates: [[String: AnyO
         let tol: CGFloat = 2.0
         if let match = candidates.first(where: { desc in
             let wid = CGWindowID((desc[kCGWindowNumber as String] as? NSNumber)?.uint32Value ?? 0)
-            if excluding.contains(wid) { return false }
+            if excluding.contains(wid) {
+                return false
+            }
             let bounds = desc[kCGWindowBounds as String] as? [String: AnyObject]
             let rx = CGFloat((bounds?["X"] as? NSNumber)?.doubleValue ?? .infinity)
             let ry = CGFloat((bounds?["Y"] as? NSNumber)?.doubleValue ?? .infinity)
@@ -435,12 +465,16 @@ func isValidCGWindowCandidate(_ id: CGWindowID, in candidates: [[String: AnyObje
     let rw = CGFloat((bounds?["Width"] as? NSNumber)?.doubleValue ?? 0)
     let rh = CGFloat((bounds?["Height"] as? NSNumber)?.doubleValue ?? 0)
     let alpha = CGFloat((match[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1.0)
-    if !WindowCandidateDiscriminator.hasUsableSize(CGSize(width: rw, height: rh)) { return false }
-    if alpha <= 0.01 { return false }
+    if !WindowCandidateDiscriminator.hasUsableSize(CGSize(width: rw, height: rh)) {
+        return false
+    }
+    if alpha <= 0.01 {
+        return false
+    }
     return true
 }
 
-// Returns the set of currently active Space IDs across all displays.
+/// Returns the set of currently active Space IDs across all displays.
 func currentActiveSpaceIDs() -> Set<Int> {
     // Primary: ask macOS directly for the current space per display
     if let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: AnyObject]] {
@@ -452,7 +486,9 @@ func currentActiveSpaceIDs() -> Set<Int> {
                 result.insert(spaceID)
             }
         }
-        if !result.isEmpty { return result }
+        if !result.isEmpty {
+            return result
+        }
     }
 
     // Fallback: infer from on-screen windows
@@ -562,10 +598,272 @@ enum WindowSpaces {
 
         return SLSMoveWindowsToManagedSpace([windowID], targetSpaceID)
     }
+
+    /// True while Mission Control (or App Exposé) is showing: the Dock then owns
+    /// screen-sized on-screen windows at layer 18, which never exist otherwise.
+    static func isMissionControlActive() -> Bool {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        for window in list where (window[kCGWindowOwnerName as String] as? String) == "Dock" {
+            guard (window[kCGWindowLayer as String] as? Int) == 18,
+                  let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
+                  let width = bounds["Width"], let height = bounds["Height"]
+            else { continue }
+            if NSScreen.screens.contains(where: { abs($0.frame.width - width) < 2 && abs($0.frame.height - height) < 2 }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Full ordered snapshot of every display's spaces, for the Space Switcher.
+    /// Desktop numbers always follow Mission Control (main display first, then
+    /// left to right); `order` only affects how the display rows are stacked.
+    static func displaySpacesSnapshot(order: SpaceSwitcherDisplayOrder = .mainDisplayFirst) -> [DisplaySpaces] {
+        guard let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: AnyObject]] else {
+            return []
+        }
+
+        let parsed: [(identifier: String, screen: NSScreen?, currentSpaceID: CGSSpaceID?, spaceDicts: [[String: AnyObject]])] = displays.compactMap { display in
+            guard let identifier = display["Display Identifier"] as? String else { return nil }
+            return (
+                identifier: identifier,
+                screen: screen(forDisplayIdentifier: identifier),
+                currentSpaceID: spaceID(from: display["Current Space"] as? [String: AnyObject]),
+                spaceDicts: display["Spaces"] as? [[String: AnyObject]] ?? []
+            )
+        }
+
+        // Main screen's display first, remaining rows left-to-right; unresolved displays last.
+        let ordered = parsed.sorted { a, b in
+            switch (a.screen, b.screen) {
+            case let (sa?, sb?):
+                let mainA = sa == NSScreen.screens.first
+                let mainB = sb == NSScreen.screens.first
+                if mainA != mainB {
+                    return mainA
+                }
+                return sa.frame.minX < sb.frame.minX
+            case (nil, nil): return a.identifier < b.identifier
+            case (nil, _): return false
+            case (_, nil): return true
+            }
+        }
+
+        // Desktop numbering is global and continuous across displays, matching
+        // Mission Control (fullscreen-app spaces are unnumbered).
+        var desktopCounter = 0
+        let numbered = ordered.map { display in
+            let spaces: [SpaceInfo] = display.spaceDicts.compactMap { dict in
+                guard let id = spaceID(from: dict) else { return nil }
+                let type = (dict["type"] as? NSNumber)?.intValue ?? 0
+                if type != 4 {
+                    desktopCounter += 1
+                }
+                return SpaceInfo(
+                    id: id,
+                    uuid: dict["uuid"] as? String ?? "",
+                    type: type,
+                    displayIdentifier: display.identifier,
+                    desktopNumber: type == 4 ? 0 : desktopCounter,
+                    isCurrent: id == display.currentSpaceID
+                )
+            }
+
+            return DisplaySpaces(
+                identifier: display.identifier,
+                screen: display.screen,
+                currentSpaceID: display.currentSpaceID,
+                spaces: spaces
+            )
+        }
+        var frames: [String: CGRect] = [:]
+        for display in numbered {
+            if let screen = display.screen {
+                frames[display.identifier] = screen.frame
+            }
+        }
+        let leadScreen: NSScreen? = switch order {
+        case .displayWithMouseFirst: NSScreen.screenFromQuartzPoint(DockObserver.getMousePosition())
+        case .displayWithActiveWindowFirst: SwitcherScreenPlacement.screenOfFocusedWindow()
+            ?? NSScreen.screenFromQuartzPoint(DockObserver.getMousePosition())
+        default: nil
+        }
+        let leadIdentifier = numbered.first { $0.screen != nil && $0.screen == leadScreen }?.identifier
+        return reorderRows(numbered, order: order, frames: frames, leadIdentifier: leadIdentifier)
+    }
+
+    /// Applies the display-row order setting to a main-first, left-to-right
+    /// list. `frames` holds AppKit screen frames by display identifier; displays
+    /// without one keep their trailing position. `leadIdentifier` is the display
+    /// promoted to the first row for the "… first" orders.
+    static func reorderRows(
+        _ displays: [DisplaySpaces],
+        order: SpaceSwitcherDisplayOrder,
+        frames: [String: CGRect],
+        leadIdentifier: String? = nil
+    ) -> [DisplaySpaces] {
+        let resolved = displays.filter { frames[$0.identifier] != nil }
+        let unresolved = displays.filter { frames[$0.identifier] == nil }
+        func frame(_ d: DisplaySpaces) -> CGRect {
+            frames[d.identifier] ?? .zero
+        }
+
+        func leftToRight(_ list: [DisplaySpaces]) -> [DisplaySpaces] {
+            list.sorted { (frame($0).minX, -frame($0).maxY) < (frame($1).minX, -frame($1).maxY) }
+        }
+
+        func lead(_ list: [DisplaySpaces]) -> [DisplaySpaces] {
+            guard let leadIdentifier, let index = list.firstIndex(where: { $0.identifier == leadIdentifier }) else { return list }
+            var rest = list
+            let head = rest.remove(at: index)
+            return [head] + rest
+        }
+
+        let rows: [DisplaySpaces] = switch order {
+        case .mainDisplayFirst:
+            resolved
+        case .leftToRight:
+            leftToRight(resolved)
+        case .topToBottom:
+            // AppKit y grows upward; a higher maxY is physically higher.
+            resolved.sorted { (frame($0).maxY, -frame($0).minX) > (frame($1).maxY, -frame($1).minX) }
+        case .displayWithMouseFirst, .displayWithActiveWindowFirst:
+            lead(leftToRight(resolved))
+        }
+        return rows + unresolved
+    }
+
+    static func screen(forDisplayIdentifier identifier: String) -> NSScreen? {
+        let lowered = identifier.lowercased()
+        return NSScreen.screens.first { screen in
+            displayIdentifiers(for: screen).contains { $0.lowercased() == lowered }
+        }
+            // "Main" appears when displays don't have separate Spaces
+            ?? (lowered == "main" ? NSScreen.screens.first : nil)
+    }
+
+    // MARK: - Dock-swipe gesture switching
+
+    /// Undocumented CGEvent gesture fields, as used by yabai's SIP-on fallback
+    /// (space_manager_focus_space_using_gesture) and InstantSpaceSwitcher.
+    private enum DockGesture {
+        static let eventType = CGEventField(rawValue: 55)! // kCGSEventTypeField
+        static let hidType = CGEventField(rawValue: 110)! // kCGEventGestureHIDType
+        static let swipeMotion = CGEventField(rawValue: 123)! // kCGEventGestureSwipeMotion
+        static let swipeProgress = CGEventField(rawValue: 124)! // kCGEventGestureSwipeProgress
+        static let swipeVelocityX = CGEventField(rawValue: 129)! // kCGEventGestureSwipeVelocityX
+        static let gesturePhase = CGEventField(rawValue: 132)! // kCGEventGesturePhase
+
+        static let dockControl: Int64 = 30 // kCGSEventDockControl
+        static let dockSwipe: Int64 = 23 // kIOHIDEventTypeDockSwipe
+        static let horizontal: Int64 = 1 // kCGGestureMotionHorizontal
+        static let phaseBegan: Int64 = 1
+        static let phaseEnded: Int64 = 4
+    }
+
+    /// Switches to a space by synthesizing Mission Control dock-swipe gestures.
+    /// The Dock performs the actual switch, so Mission Control stays in sync —
+    /// unlike calling CGSManagedDisplaySetCurrentSpace from outside the Dock.
+    /// The gesture applies to the display under the cursor, so the cursor is
+    /// warped to the target display first and restored unless `keepCursor`.
+    @discardableResult
+    static func switchViaDockGesture(to space: SpaceInfo, on display: DisplaySpaces, keepCursor: Bool) -> Bool {
+        guard let currentID = display.currentSpaceID,
+              let currentIndex = display.spaces.firstIndex(where: { $0.id == currentID }),
+              let targetIndex = display.spaces.firstIndex(where: { $0.id == space.id }),
+              currentIndex != targetIndex
+        else { return false }
+
+        guard !CGSManagedDisplayIsAnimating(CGSMainConnectionID(), display.identifier) else {
+            DebugLogger.log("WindowSpaces.switchViaDockGesture", details: "display \(display.identifier) is animating")
+            return false
+        }
+
+        // Warp the cursor to the target display when it's elsewhere
+        var restorePoint: CGPoint?
+        if let screen = display.screen,
+           let primaryMaxY = NSScreen.screens.first?.frame.maxY,
+           let cursor = CGEvent(source: nil)?.location
+        {
+            let screenCG = CGRect(
+                x: screen.frame.origin.x,
+                y: primaryMaxY - screen.frame.maxY,
+                width: screen.frame.width,
+                height: screen.frame.height
+            )
+            if !screenCG.contains(cursor) {
+                restorePoint = cursor
+                CGWarpMouseCursorPosition(CGPoint(x: screenCG.midX, y: screenCG.midY))
+            }
+        }
+
+        let steps = abs(targetIndex - currentIndex)
+        let sign: Double = targetIndex > currentIndex ? 1.0 : -1.0
+
+        // Stagger multi-step swipes slightly so the Dock doesn't drop swipes
+        // that arrive mid-animation on longer jumps.
+        for step in 0 ..< steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * 0.12) {
+                postDockSwipe(sign: sign)
+            }
+        }
+
+        if let restorePoint, !keepCursor {
+            scheduleCursorRestore(to: restorePoint, delay: 0.35 + Double(steps - 1) * 0.12)
+        }
+        return true
+    }
+
+    private static func postDockSwipe(sign: Double) {
+        guard let event = CGEvent(source: nil) else { return }
+        event.setIntegerValueField(DockGesture.eventType, value: DockGesture.dockControl)
+        event.setIntegerValueField(DockGesture.hidType, value: DockGesture.dockSwipe)
+        event.setIntegerValueField(DockGesture.swipeMotion, value: DockGesture.horizontal)
+        event.setDoubleValueField(DockGesture.swipeProgress, value: sign)
+        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * 9999.0)
+        event.setIntegerValueField(DockGesture.gesturePhase, value: DockGesture.phaseBegan)
+        event.post(tap: .cgSessionEventTap)
+        event.setIntegerValueField(DockGesture.gesturePhase, value: DockGesture.phaseEnded)
+        event.post(tap: .cgSessionEventTap)
+    }
+
+    private static var cursorRestoreWork: DispatchWorkItem?
+
+    /// Restores the cursor after a warp, unless the user has moved it since —
+    /// and coalesces with any pending restore from a rapid earlier switch.
+    private static func scheduleCursorRestore(to restorePoint: CGPoint, delay: TimeInterval) {
+        cursorRestoreWork?.cancel()
+        let warpedTo = CGEvent(source: nil)?.location
+        let work = DispatchWorkItem {
+            guard let warpedTo,
+                  let current = CGEvent(source: nil)?.location,
+                  abs(current.x - warpedTo.x) < 20, abs(current.y - warpedTo.y) < 20
+            else { return }
+            CGWarpMouseCursorPosition(restorePoint)
+        }
+        cursorRestoreWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    @discardableResult
+    static func setCurrentSpace(_ targetSpaceID: CGSSpaceID, onDisplay displayIdentifier: String) -> Bool {
+        let displays = displaySpacesSnapshot()
+        guard let display = displays.first(where: { $0.identifier == displayIdentifier }),
+              display.spaces.contains(where: { $0.id == targetSpaceID })
+        else {
+            DebugLogger.log("WindowSpaces.setCurrentSpace", details: "Space \(targetSpaceID) not found on display \(displayIdentifier)")
+            return false
+        }
+
+        guard display.currentSpaceID != targetSpaceID else { return true }
+        return CGSManagedDisplaySetCurrentSpace(CGSMainConnectionID(), displayIdentifier, targetSpaceID)
+    }
 }
 
-// Decide if a window should be accepted considering on-screen state,
-// ScreenCaptureKit presence, multi-Space, and window/app state.
+/// Decide if a window should be accepted considering on-screen state,
+/// ScreenCaptureKit presence, multi-Space, and window/app state.
 func shouldAcceptWindow(axWindow: AXUIElement,
                         windowID: CGWindowID,
                         cgEntry: [String: AnyObject],
@@ -581,11 +879,17 @@ func shouldAcceptWindow(axWindow: AXUIElement,
 
     let isOnActiveSpace = !windowSpaces.isEmpty && !windowSpaces.isDisjoint(with: activeSpaceIDs)
     let isGhostWindow = !isOnscreen && isOnActiveSpace && !axIsMinimized && !axIsFullscreen && !app.isHidden
-    if isGhostWindow { return false }
+    if isGhostWindow {
+        return false
+    }
 
-    if isOnscreen || scBacked { return true }
+    if isOnscreen || scBacked {
+        return true
+    }
 
-    if app.isHidden || axIsFullscreen || axIsMinimized { return true }
+    if app.isHidden || axIsFullscreen || axIsMinimized {
+        return true
+    }
 
     // Window on different Space — but reject if not onscreen and not minimized/fullscreen/hidden (ghost with stale space ID)
     if !windowSpaces.isEmpty, windowSpaces.isDisjoint(with: activeSpaceIDs) {
