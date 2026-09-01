@@ -4,6 +4,7 @@ import SwiftUI
 
 struct WindowSwitcherKeybindSection: View {
     @Default(.enableWindowSwitcher) var enableWindowSwitcher
+    @Default(.enableSpaceSwitcher) var enableSpaceSwitcher
     @Default(.enableWindowSwitcherSearch) var enableWindowSwitcherSearch
     @Default(.searchTriggerKey) var searchTriggerKey
     @Default(.fullscreenAppBlacklist) var fullscreenAppBlacklist
@@ -15,24 +16,24 @@ struct WindowSwitcherKeybindSection: View {
     @Default(.enableVimMotions) var enableVimMotions
     @Default(.passArrowsThroughToSystem) var passArrowsThroughToSystem
 
-    @StateObject private var keybindModel = KeybindModel()
+    @StateObject private var keybindModel = KeybindModel(validate: KeybindConflicts.validateWindowSwitcherKeybind)
     @State private var showingAddBlacklistAppSheet = false
     @State private var newBlacklistApp = ""
+    @State private var vimMotionsError: String?
+    @State private var backwardKeyError: String?
+    @State private var selectionKeyError: String?
+    @State private var alternateKeyError: String?
+
+    /// Backward key, selection key and Vim motions are shared with the Space Switcher.
+    private var anySwitcherEnabled: Bool {
+        enableWindowSwitcher || enableSpaceSwitcher
+    }
 
     var body: some View {
         SettingsGroup(header: "Window Switcher Shortcuts") {
             VStack(alignment: .leading, spacing: 12) {
                 if !enableWindowSwitcher {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.yellow)
-                        Text("Window Switcher is disabled. Enable it in General settings to use keyboard shortcuts.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(8)
-                    .background(Color.yellow.opacity(0.1))
-                    .cornerRadius(8)
+                    SettingsWarningCallout("Window Switcher is disabled. Enable it in Window Switcher settings to use keyboard shortcuts.")
                 }
 
                 keyboardShortcutSection
@@ -45,12 +46,15 @@ struct WindowSwitcherKeybindSection: View {
                     HStack {
                         Text("Backward Key")
                         Spacer()
-                        KeyCaptureButton(keyCode: $switcherBackwardKeyCode, captureModifiers: true)
+                        KeyCaptureButton(keyCode: $switcherBackwardKeyCode, captureModifiers: true, validate: KeybindConflicts.validateBackwardKey, error: $backwardKeyError)
                         Button("Reset") { switcherBackwardKeyCode = 56 }
                             .buttonStyle(.bordered)
                     }
                     .settingsSearchTarget("gestures.backwardKey")
-                    Text("The key used to navigate backward in the window switcher.")
+                    if let backwardKeyError {
+                        SettingsWarningCallout(verbatim: backwardKeyError, style: .error)
+                    }
+                    Text("The key used to navigate backward in the Window and Space Switchers.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
@@ -58,43 +62,58 @@ struct WindowSwitcherKeybindSection: View {
                         Text("Require \(KeyboardLabel.localizedKey(for: switcherBackwardKeyCode))+Tab to go back in Switcher")
                     }
                     .settingsSearchTarget("gestures.requireShiftTab")
-                    Text("When enabled, pressing the backward key alone won't go back. Use it with Tab to navigate backward.")
+                    .disabled(!enableWindowSwitcher)
+                    Text("When enabled, pressing the backward key alone won't go back in the Window Switcher. Use it with Tab to navigate backward.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.leading, 20)
                 }
-                .disabled(!enableWindowSwitcher)
-                .opacity(enableWindowSwitcher ? 1.0 : 0.5)
+                .disabled(!anySwitcherEnabled)
+                .opacity(anySwitcherEnabled ? 1.0 : 0.5)
 
                 Divider()
 
                 selectionKeySection
-                    .disabled(!enableWindowSwitcher)
-                    .opacity(enableWindowSwitcher ? 1.0 : 0.5)
+                    .disabled(!anySwitcherEnabled)
+                    .opacity(anySwitcherEnabled ? 1.0 : 0.5)
 
                 Divider()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Toggle(isOn: $enableVimMotions) {
+                    Toggle(isOn: Binding(
+                        get: { enableVimMotions },
+                        set: { newValue in
+                            if newValue, let reason = KeybindConflicts.validateEnablingVimMotions() {
+                                vimMotionsError = reason
+                                return
+                            }
+                            vimMotionsError = nil
+                            enableVimMotions = newValue
+                        }
+                    )) {
                         Text("Enable Vim Motions")
                     }
                     .settingsSearchTarget("gestures.vimMotions")
-                    Text("Use H/J/K/L keys to navigate left/down/up/right in the window switcher. Disabled while search is focused.")
+                    Text("Use H/J/K/L keys to navigate left/down/up/right in the Window and Space Switchers. Disabled while search is focused.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.leading, 20)
+                    if let vimMotionsError {
+                        SettingsWarningCallout(verbatim: vimMotionsError, style: .error)
+                    }
 
                     Toggle(isOn: $passArrowsThroughToSystem) {
                         Text("Pass Arrow Keys Through to System")
                     }
                     .settingsSearchTarget("gestures.arrowPassthrough")
-                    Text("When enabled, Ctrl+Arrow keys will be passed through to the system instead of navigating the switcher. Useful for Spaces switching.")
+                    .disabled(!enableWindowSwitcher)
+                    Text("When enabled, Ctrl+Arrow keys will be passed through to the system instead of navigating the Window Switcher. Useful for Spaces switching.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.leading, 20)
                 }
-                .disabled(!enableWindowSwitcher)
-                .opacity(enableWindowSwitcher ? 1.0 : 0.5)
+                .disabled(!anySwitcherEnabled)
+                .opacity(anySwitcherEnabled ? 1.0 : 0.5)
 
                 Divider()
 
@@ -141,74 +160,15 @@ struct WindowSwitcherKeybindSection: View {
             }
             .settingsSearchTarget("gestures.switcherKeybind")
         }
-        .onAppear {
-            keybindModel.modifierKey = Defaults[.UserKeybind].modifierFlags
-            keybindModel.currentKeybind = Defaults[.UserKeybind]
-        }
     }
 
     // MARK: - Keyboard Shortcut Section
 
     private var keyboardShortcutSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Current shortcut summary
-            if let keybind = keybindModel.currentKeybind, keybind.keyCode != 0 {
-                HStack(spacing: 8) {
-                    KeyCapView(text: modifierConverter.toString(keybind.modifierFlags), symbol: nil)
-                    Text("+").foregroundColor(.secondary)
-                    KeyCapView(text: KeyboardLabel.localizedKey(for: keybind.keyCode), symbol: nil)
-                }
-            } else {
-                Text("No shortcut set").foregroundColor(.secondary)
-            }
-
-            // Controls: initializer modifier + capture button
-            HStack(spacing: 12) {
-                Picker("Initializer", selection: $keybindModel.modifierKey) {
-                    Text("Control ⌃").tag(Defaults[.Int64maskControl])
-                    Text("Option ⌥").tag(Defaults[.Int64maskAlternate])
-                    Text("Command ⌘").tag(Defaults[.Int64maskCommand])
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
-                .onChange(of: keybindModel.modifierKey) { newValue in
-                    if let currentKeybind = keybindModel.currentKeybind, currentKeybind.keyCode != 0 {
-                        let updatedKeybind = UserKeyBind(keyCode: currentKeybind.keyCode, modifierFlags: newValue)
-                        Defaults[.UserKeybind] = updatedKeybind
-                        keybindModel.currentKeybind = updatedKeybind
-                    }
-                }
-
-                Button(action: { keybindModel.isRecording.toggle() }) {
-                    HStack {
-                        Image(systemName: keybindModel.isRecording ? "keyboard.fill" : "record.circle")
-                        Text(keybindModel.isRecording ? "Press shortcut…" : "Change…")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(keybindModel.isRecording)
-
-                Button("Reset") {
-                    let def = UserKeyBind(keyCode: 48, modifierFlags: Defaults[.Int64maskAlternate])
-                    Defaults[.UserKeybind] = def
-                    keybindModel.currentKeybind = def
-                    keybindModel.modifierKey = def.modifierFlags
-                }
-                .buttonStyle(.bordered)
-            }
-
-            Text("Either left or right Command, Option, or Control keys work. You can also hold the modifier while pressing the trigger to capture both.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .background(
-            ShortcutCaptureView(
-                currentKeybind: $keybindModel.currentKeybind,
-                isRecording: $keybindModel.isRecording,
-                modifierKey: $keybindModel.modifierKey
-            )
-            .allowsHitTesting(false)
-            .frame(width: 0, height: 0)
+        SwitcherShortcutEditor(
+            model: keybindModel,
+            defaultKeybind: UserKeyBind(keyCode: 48, modifierFlags: Defaults[.Int64maskAlternate]),
+            caption: "Either left or right Command, Option, or Control keys work. You can also hold the modifier while pressing the trigger to capture both."
         )
     }
 
@@ -219,12 +179,15 @@ struct WindowSwitcherKeybindSection: View {
             HStack {
                 Text("Selection Key")
                 Spacer()
-                KeyCaptureButton(keyCode: $selectionKeyCode)
+                KeyCaptureButton(keyCode: $selectionKeyCode, validate: KeybindConflicts.validateSelectionKey, error: $selectionKeyError)
                 Button("Reset") { selectionKeyCode = UInt16(kVK_Return) }
                     .buttonStyle(.bordered)
             }
             .settingsSearchTarget("gestures.selectionKey")
-            Text("The key used to select and bring to front the highlighted window in the switcher.")
+            if let selectionKeyError {
+                SettingsWarningCallout(verbatim: selectionKeyError, style: .error)
+            }
+            Text("The key used to confirm the highlighted window or Space in the Window and Space Switchers.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -248,7 +211,7 @@ struct WindowSwitcherKeybindSection: View {
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
 
-                KeyCaptureButton(keyCode: $alternateKeybindKey, emptyLabel: "Not set")
+                KeyCaptureButton(keyCode: $alternateKeybindKey, emptyLabel: "Not set", validate: { KeybindConflicts.validateAlternateKey($0, modifier: keybindModel.modifierKey) }, error: $alternateKeyError)
 
                 if alternateKeybindKey != 0 {
                     Button("Clear") {
@@ -268,6 +231,9 @@ struct WindowSwitcherKeybindSection: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .frame(maxWidth: 200)
+            }
+            if let alternateKeyError {
+                SettingsWarningCallout(verbatim: alternateKeyError, style: .error)
             }
         }
         .settingsSearchTarget("gestures.alternateShortcut")

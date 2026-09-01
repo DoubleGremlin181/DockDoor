@@ -69,7 +69,13 @@ struct WindowSwitcherBehaviorSettingsView: View {
                 Text("The Window Switcher (often Alt/Cmd-Tab) lets you quickly cycle between open app windows with a keyboard shortcut.")
             }
             .settingsSearchTarget("windowSwitcher.enable")
-            .onChange(of: enableWindowSwitcher) { _ in askUserToRestartApplication() }
+            .onChange(of: enableWindowSwitcher) { enabled in
+                // The Window Switcher wins a shared shortcut; move the Space Switcher's if needed.
+                if enabled {
+                    KeybindConflicts.resolveSpaceKeybindOnEnable()
+                }
+                askUserToRestartApplication()
+            }
         }
     }
 

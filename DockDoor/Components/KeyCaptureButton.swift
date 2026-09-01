@@ -5,11 +5,40 @@ struct KeyCaptureButton: View {
     @Binding var keyCode: UInt16
     var emptyLabel: String?
     var captureModifiers: Bool = false
+    /// Returns a localized reason to refuse the pressed key, or nil to accept it.
+    var validate: ((UInt16) -> String?)?
+    /// When provided, the refusal reason is published here for the parent to
+    /// render (keeps the button in line with its row); otherwise it is shown inline.
+    var error: Binding<String?>?
 
     @State private var isCapturing = false
     @State private var monitors: [Any] = []
+    @State private var inlineError: String?
+
+    private func setError(_ message: String?) {
+        if let error {
+            error.wrappedValue = message
+        } else {
+            inlineError = message
+        }
+    }
 
     var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            captureControl
+            if error == nil, let inlineError {
+                Text(inlineError)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .onChange(of: keyCode) { _ in setError(nil) }
+    }
+
+    @ViewBuilder
+    private var captureControl: some View {
         if isCapturing {
             Text("Press a key…")
                 .font(.system(size: 12))
@@ -38,6 +67,17 @@ struct KeyCaptureButton: View {
         return KeyboardLabel.localizedKey(for: keyCode)
     }
 
+    /// Stores the key unless `validate` refuses it, in which case the previous
+    /// value is kept and the reason is shown under the button.
+    private func accept(_ newKeyCode: UInt16) {
+        if let reason = validate?(newKeyCode) {
+            setError(reason)
+            return
+        }
+        setError(nil)
+        keyCode = newKeyCode
+    }
+
     private func stopCapture() {
         isCapturing = false
         for monitor in monitors {
@@ -48,6 +88,7 @@ struct KeyCaptureButton: View {
 
     private func startCapture() {
         stopCapture()
+        setError(nil)
         isCapturing = true
 
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
@@ -55,7 +96,7 @@ struct KeyCaptureButton: View {
                 stopCapture()
                 return nil
             }
-            keyCode = event.keyCode
+            accept(event.keyCode)
             stopCapture()
             return nil
         }!)
@@ -64,7 +105,7 @@ struct KeyCaptureButton: View {
             monitors.append(NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                 let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
                 if modifierKeyCodes.contains(event.keyCode) {
-                    keyCode = event.keyCode
+                    accept(event.keyCode)
                     stopCapture()
                 }
                 return event

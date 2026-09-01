@@ -2,8 +2,8 @@ import Foundation
 
 enum SettingsSearchCatalog {
     static let items: [SettingsSearchItem] = generalItems + dockPreviewItems + windowSwitcherItems
-        + cmdTabItems + dockLockingItems + appearanceItems + gesturesItems + filtersItems
-        + widgetItems + advancedItems + supportItems
+        + cmdTabItems + spaceSwitcherItems + dockLockingItems + appearanceItems + gesturesItems
+        + filtersItems + widgetItems + advancedItems + supportItems
 
     // MARK: - General
 
@@ -524,6 +524,126 @@ enum SettingsSearchCatalog {
             tab: "CmdTab",
             section: String(localized: "Window Display"),
             icon: "arrow.up.arrow.down"
+        ),
+    ]
+
+    // MARK: - Space Switcher
+
+    private static let spaceSwitcherItems: [SettingsSearchItem] = [
+        SettingsSearchItem(
+            id: "spaceSwitcher.enable",
+            title: String(localized: "Enable Space Switcher"),
+            description: String(localized: "Shows every Space on every display with a preview of its windows, and lets you jump between Spaces with a keyboard shortcut — hold the modifier and tap the trigger key to cycle, release to switch."),
+            keywords: ["space", "spaces", "desktop", "virtual", "mission control", "switcher", "pager"],
+            tab: "SpaceSwitcher",
+            section: "",
+            icon: "rectangle.on.rectangle"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.keybind",
+            title: String(localized: "Initializer"),
+            description: String(localized: "A modifier key is required — hold it to keep the switcher open, release it to switch to the selected Space."),
+            keywords: ["space", "shortcut", "keybind", "hotkey", "modifier", "option", "tab"],
+            tab: "GesturesKeybinds",
+            section: String(localized: "Space Switcher Shortcuts"),
+            icon: "keyboard"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.moveWindowKey",
+            title: String(localized: "Move Window Key"),
+            description: String(localized: "While the switcher is open, press this key to move the active window to the selected Space."),
+            keywords: ["move", "window", "space", "send", "throw"],
+            tab: "GesturesKeybinds",
+            section: String(localized: "Space Switcher Shortcuts"),
+            icon: "arrow.up.and.down.and.arrow.left.and.right"
+        ),
+        SettingsSearchItem(
+            id: "gestures.spaceSwitcherKeybind",
+            title: String(localized: "Space Switcher Shortcuts"),
+            description: String(localized: "Primary shortcut, Move Window Key and the keys shared with the Window Switcher."),
+            keywords: ["space", "shortcut", "keybind", "hotkey", "backward", "selection", "vim"],
+            tab: "GesturesKeybinds",
+            section: String(localized: "Space Switcher Shortcuts"),
+            icon: "keyboard"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.startOnSecond",
+            title: String(localized: "Start on second Space"),
+            description: String(localized: "Highlight the next Space instead of the current one when opening."),
+            keywords: ["start", "second", "next", "initial", "selection", "classic"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Behavior"),
+            icon: "2.circle"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.placement",
+            title: String(localized: "Screen"),
+            description: String(localized: "Which screen the Space Switcher opens on: with the mouse, with the active window, or pinned."),
+            keywords: ["placement", "screen", "display", "monitor", "pin", "pinned", "mouse", "active"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Placement"),
+            icon: "display"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.displayOrder",
+            title: String(localized: "Display row order"),
+            description: String(localized: "How display rows are stacked when more than one display has Spaces."),
+            keywords: ["display", "monitor", "row", "order", "arrange", "main", "left", "right", "top", "bottom"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Placement"),
+            icon: "rectangle.split.1x2"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.showDisplayNames",
+            title: String(localized: "Show display names"),
+            description: String(localized: "Label each row with its display name when more than one display has Spaces."),
+            keywords: ["display", "name", "label", "monitor", "row"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Appearance"),
+            icon: "textformat.abc"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.previewStyle",
+            title: String(localized: "Preview style"),
+            description: String(localized: "Window thumbnails at their real positions on each Space"),
+            keywords: ["preview", "thumbnail", "composite", "mini", "desktop", "exploded", "mission control", "list", "style"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Appearance"),
+            icon: "photo.on.rectangle"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.stayOpen",
+            title: String(localized: "Release initializer key to switch Space"),
+            description: String(localized: "When off, the switcher stays open after releasing the shortcut: navigate with arrow keys and confirm with the selection key or a click; Escape or clicking outside dismisses. Windows can be dragged between Spaces while the switcher is open."),
+            keywords: ["persist", "stay", "open", "release", "pin", "drag"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Behavior"),
+            icon: "pin"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.warpCursor",
+            title: String(localized: "Move cursor to the selected display"),
+            description: String(localized: "After switching, the cursor jumps to the center of the display that owns the selected Space."),
+            keywords: ["cursor", "mouse", "warp", "follow", "display"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Behavior"),
+            icon: "cursorarrow.motionlines"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.showLabels",
+            title: String(localized: "Show Space labels"),
+            keywords: ["label", "name", "desktop", "number"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Appearance"),
+            icon: "textformat"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.cardWidth",
+            title: String(localized: "Space card width"),
+            keywords: ["size", "width", "card", "scale"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Appearance"),
+            icon: "ruler"
         ),
     ]
 

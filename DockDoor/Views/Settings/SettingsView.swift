@@ -173,6 +173,8 @@ struct SettingsView: View {
                                 .tag("WindowSwitcher")
                             Label(String(localized: "Cmd+Tab", comment: "Settings tab title"), systemImage: "command")
                                 .tag("CmdTab")
+                            Label(String(localized: "Space Switcher", comment: "Settings tab title"), systemImage: "rectangle.on.rectangle")
+                                .tag("SpaceSwitcher")
                             Label(String(localized: "Dock Locking", comment: "Settings tab title"), systemImage: "lock.fill")
                                 .tag("DockLocking")
                         }
@@ -211,6 +213,8 @@ struct SettingsView: View {
                     WindowSwitcherBehaviorSettingsView()
                 case "CmdTab":
                     CmdTabSettingsView()
+                case "SpaceSwitcher":
+                    SpaceSwitcherSettingsView()
                 case "DockLocking":
                     DockLockingSettingsView()
                 case "Appearance":

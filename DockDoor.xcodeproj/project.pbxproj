@@ -11,8 +11,10 @@
 		431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */; };
 		FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */; };
 		894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */; };
+		1829036ACADB407883025CE4 /* SpaceSwitcherKeybindSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A982912493AD4E5A8CBF404B /* SpaceSwitcherKeybindSection.swift */; };
 		83A8FD13D33D4A2EBD7424BC /* KeybindConflicts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */; };
 		083B8C48914A88BF8AA0C79D /* SwitcherScreenPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */; };
+		199FD169DAA44F0FBDCA5481 /* SettingsWarningCallout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 490A366EECC743FFB3588FCC /* SettingsWarningCallout.swift */; };
 		0531F8D22C3CC04600327808 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */; };
 		0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0596C2C22C3E060D00DCABEF /* PrivateApis.swift */; };
 		05C0C7182C60629C000ADAC6 /* AXUIElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C0C7172C60629C000ADAC6 /* AXUIElement.swift */; };
@@ -112,6 +114,7 @@
 		7B5843F6CD19422BA0FADD98 /* SpaceSwitcherContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43542F5DA154FF1A81E21DD /* SpaceSwitcherContainer.swift */; };
 		775D11E8DE1F47F5A2116219 /* SpaceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE1CB62CA894939BF9F187C /* SpaceCard.swift */; };
 		3F87D212460878EAEE90B81A /* SpaceWindowCompactRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0E90B1D5B6AC5ADF86CEA4 /* SpaceWindowCompactRow.swift */; };
+		3C1AC90D385D44619E6251E2 /* SpaceSwitcherSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7673B8D672314EC58A7A59C1 /* SpaceSwitcherSettingsView.swift */; };
 		BB2106762E834F25002F87D6 /* CmdTabFocusFullOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106752E834F25002F87D6 /* CmdTabFocusFullOverlayView.swift */; };
 		BB2106782E834F46002F87D6 /* KeyHintRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106772E834F46002F87D6 /* KeyHintRow.swift */; };
 		BB21067D2E83565A002F87D6 /* KeyboardLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB21067C2E83565A002F87D6 /* KeyboardLabel.swift */; };
@@ -254,8 +257,10 @@
 		45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacementTests.swift; sourceTree = "<group>"; };
 		73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngineTests.swift; sourceTree = "<group>"; };
 		3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherDisplayOrderTests.swift; sourceTree = "<group>"; };
+		A982912493AD4E5A8CBF404B /* SpaceSwitcherKeybindSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherKeybindSection.swift; sourceTree = "<group>"; };
 		71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeybindConflicts.swift; sourceTree = "<group>"; };
 		A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacement.swift; sourceTree = "<group>"; };
+		490A366EECC743FFB3588FCC /* SettingsWarningCallout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWarningCallout.swift; sourceTree = "<group>"; };
 		033B1F63CB464113ADA3868696F486CF /* WindowlessAppPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowlessAppPreview.swift; sourceTree = "<group>"; };
 		0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		0596C2C22C3E060D00DCABEF /* PrivateApis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateApis.swift; sourceTree = "<group>"; };
@@ -357,6 +362,7 @@
 		F43542F5DA154FF1A81E21DD /* SpaceSwitcherContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherContainer.swift; sourceTree = "<group>"; };
 		3AE1CB62CA894939BF9F187C /* SpaceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceCard.swift; sourceTree = "<group>"; };
 		AF0E90B1D5B6AC5ADF86CEA4 /* SpaceWindowCompactRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceWindowCompactRow.swift; sourceTree = "<group>"; };
+		7673B8D672314EC58A7A59C1 /* SpaceSwitcherSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherSettingsView.swift; sourceTree = "<group>"; };
 		BB2106752E834F25002F87D6 /* CmdTabFocusFullOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CmdTabFocusFullOverlayView.swift; sourceTree = "<group>"; };
 		BB2106772E834F46002F87D6 /* KeyHintRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyHintRow.swift; sourceTree = "<group>"; };
 		BB21067C2E83565A002F87D6 /* KeyboardLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLabel.swift; sourceTree = "<group>"; };
@@ -508,6 +514,7 @@
 				5C1919C22F1F48369D6FCCD1 /* MouseActionsSection.swift */,
 				F6AA4630D2D54CD7AB622B27 /* CmdKeyShortcutsSection.swift */,
 				3AB041F2D3174C8D9DA2111E /* WindowSwitcherKeybindSection.swift */,
+				A982912493AD4E5A8CBF404B /* SpaceSwitcherKeybindSection.swift */,
 			);
 			path = Gestures;
 			sourceTree = "<group>";
@@ -813,6 +820,7 @@
 				0970FA03935B41E59919A618 /* SettingsSliderRow.swift */,
 				3C341C31333F4619A4E79449 /* SettingsPickerRow.swift */,
 				0BD01DB1CA624D4F834C60EE /* SettingsNote.swift */,
+				490A366EECC743FFB3588FCC /* SettingsWarningCallout.swift */,
 				FCF95019606449008856E149 /* SettingsLinkRow.swift */,
 				1F2844BF18EB4D089A62A368 /* SupportLinksSection.swift */,
 				B6BF9BDC596A48798C66EA25EBAA85EE /* SettingsMockPreview.swift */,
@@ -996,6 +1004,7 @@
 				970D8CBC36D84F14B8E6E83487035CFB /* DockPreviewsSettingsView.swift */,
 				2361530A12344D0090E22EC428DC77D0 /* WindowSwitcherBehaviorSettingsView.swift */,
 				99C808769D1048FF95FCDA50FA52116A /* CmdTabSettingsView.swift */,
+				7673B8D672314EC58A7A59C1 /* SpaceSwitcherSettingsView.swift */,
 				B056906A7ACD4903BD5E1627B359AE2C /* AdvancedSettingsView.swift */,
 				BB1A85F42D05263C00326297 /* FiltersSettingsView.swift */,
 				BB1865552DD57F1E000F34AD /* SupportSettingsView.swift */,
@@ -1266,6 +1275,7 @@
 				7B5843F6CD19422BA0FADD98 /* SpaceSwitcherContainer.swift in Sources */,
 				775D11E8DE1F47F5A2116219 /* SpaceCard.swift in Sources */,
 				3F87D212460878EAEE90B81A /* SpaceWindowCompactRow.swift in Sources */,
+				3C1AC90D385D44619E6251E2 /* SpaceSwitcherSettingsView.swift in Sources */,
 				BB638F042E0217030010077D /* MediaControlButtonRow.swift in Sources */,
 				BB377C492DFD434300FA93DA /* GlobalPadding.swift in Sources */,
 				BB638F162E0218C00010077D /* SharedHoverUtils.swift in Sources */,
@@ -1315,6 +1325,7 @@
 				F0796B6D96ED42D58D75BB8A /* SettingsSliderRow.swift in Sources */,
 				FEBF808E6ABA4DE7983FCACD /* SettingsPickerRow.swift in Sources */,
 				A093F1E5F59748358F395814 /* SettingsNote.swift in Sources */,
+				199FD169DAA44F0FBDCA5481 /* SettingsWarningCallout.swift in Sources */,
 				18D7DFD6690D45C8A63982D2 /* SettingsLinkRow.swift in Sources */,
 				5C1867B80C2F46948F5C6336 /* SupportLinksSection.swift in Sources */,
 				19186F88AF6644B3962A052F /* GeneralAppearanceSection.swift in Sources */,
@@ -1333,6 +1344,7 @@
 				3BB072C8A800463CB09CC383 /* MouseActionsSection.swift in Sources */,
 				D4B28EF578BC4053BF908A5A /* CmdKeyShortcutsSection.swift in Sources */,
 				2F764043EDC3435AB84C170E /* WindowSwitcherKeybindSection.swift in Sources */,
+				1829036ACADB407883025CE4 /* SpaceSwitcherKeybindSection.swift in Sources */,
 				BBCFAE402C266234002E1516 /* FirstTimeView.swift in Sources */,
 				735F5666B8174CBEBB1ACC3CB75DB860 /* OnboardingWindow.swift in Sources */,
 				BB387FB32E70BA1300640D79 /* SearchWindow.swift in Sources */,

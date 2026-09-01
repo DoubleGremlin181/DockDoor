@@ -14,8 +14,8 @@ final class SettingsSearchEngine: ObservableObject {
 
     private static let tabDisplayOrder = [
         "General", "DockPreviews", "WindowSwitcher", "CmdTab",
-        "DockLocking", "Appearance", "GesturesKeybinds", "Filters",
-        "Widgets", "Advanced", "Support",
+        "SpaceSwitcher", "DockLocking", "Appearance", "GesturesKeybinds",
+        "Filters", "Widgets", "Advanced", "Support",
     ]
 
     static let tabDisplayNames: [String: String] = [
@@ -23,6 +23,7 @@ final class SettingsSearchEngine: ObservableObject {
         "DockPreviews": String(localized: "Dock Previews", comment: "Settings tab title"),
         "WindowSwitcher": String(localized: "Window Switcher", comment: "Settings tab title"),
         "CmdTab": String(localized: "Cmd+Tab", comment: "Settings tab title"),
+        "SpaceSwitcher": String(localized: "Space Switcher", comment: "Settings tab title"),
         "DockLocking": String(localized: "Dock Locking", comment: "Settings tab title"),
         "Appearance": String(localized: "Appearance", comment: "Settings Tab"),
         "GesturesKeybinds": String(localized: "Gestures & Keybinds", comment: "Settings tab title"),
