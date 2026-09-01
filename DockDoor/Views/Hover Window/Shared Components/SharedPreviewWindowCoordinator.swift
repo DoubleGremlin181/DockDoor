@@ -38,8 +38,7 @@ final class SharedPreviewWindowCoordinator: NSPanel {
     var pinnedWindows: [String: (window: NSWindow, info: PinnedWindowInfo)] = [:]
 
     init() {
-        let styleMask: NSWindow.StyleMask = [.nonactivatingPanel, .fullSizeContentView, .borderless]
-        super.init(contentRect: .zero, styleMask: styleMask, backing: .buffered, defer: false)
+        super.init(contentRect: .zero, styleMask: NSPanel.overlayStyleMask, backing: .buffered, defer: false)
         SharedPreviewWindowCoordinator.activeInstance = self
         setupWindow()
         setupSearchWindow()
@@ -54,15 +53,7 @@ final class SharedPreviewWindowCoordinator: NSPanel {
     }
 
     private func setupWindow() {
-        level = Defaults[.raisedWindowLevel] ? .statusBar : .floating
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = false
-        isMovableByWindowBackground = false
-        collectionBehavior = [.canJoinAllSpaces, .transient, .fullScreenAuxiliary]
-        hidesOnDeactivate = false
-        becomesKeyOnlyIfNeeded = true
-        animationBehavior = .none
+        applyOverlayStyling()
     }
 
     private func setupSearchWindow() {

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */; };
+		083B8C48914A88BF8AA0C79D /* SwitcherScreenPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */; };
 		0531F8D22C3CC04600327808 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */; };
 		0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0596C2C22C3E060D00DCABEF /* PrivateApis.swift */; };
 		05C0C7182C60629C000ADAC6 /* AXUIElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C0C7172C60629C000ADAC6 /* AXUIElement.swift */; };
@@ -173,6 +175,7 @@
 		BBB6C5372DF738E4009E93C4 /* Color.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB6C5362DF738E3009E93C4 /* Color.swift */; };
 		BBBAA15B2DE6998B00FF8F8F /* UpdaterState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBAA15A2DE6998B00FF8F8F /* UpdaterState.swift */; };
 		BBBD4AF52C8D671C0074FFCF /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBBD4AF42C8D671A0074FFCF /* NSImage.swift */; };
+		52D1F256C850AF3384C73549 /* NSPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF9375D56895CE225D9A62E /* NSPanel.swift */; };
 		BBBD4AF82C8D71560074FFCF /* ConfettiSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = BBBD4AF72C8D71560074FFCF /* ConfettiSwiftUI */; };
 		BBC57AA82E3A6BED0078B262 /* DynamicWindowFrameModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC57AA72E3A6BED0078B262 /* DynamicWindowFrameModifier.swift */; };
 		BBC5BDF42E45A708003A0D64 /* SwiftUIUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBC5BDF32E45A708003A0D64 /* SwiftUIUtils.swift */; };
@@ -235,6 +238,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacementTests.swift; sourceTree = "<group>"; };
+		A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacement.swift; sourceTree = "<group>"; };
 		033B1F63CB464113ADA3868696F486CF /* WindowlessAppPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowlessAppPreview.swift; sourceTree = "<group>"; };
 		0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		0596C2C22C3E060D00DCABEF /* PrivateApis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateApis.swift; sourceTree = "<group>"; };
@@ -400,6 +405,7 @@
 		BBB6C5362DF738E3009E93C4 /* Color.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Color.swift; sourceTree = "<group>"; };
 		BBBAA15A2DE6998B00FF8F8F /* UpdaterState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterState.swift; sourceTree = "<group>"; };
 		BBBD4AF42C8D671A0074FFCF /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
+		4FF9375D56895CE225D9A62E /* NSPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSPanel.swift; sourceTree = "<group>"; };
 		BBC57AA72E3A6BED0078B262 /* DynamicWindowFrameModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicWindowFrameModifier.swift; sourceTree = "<group>"; };
 		BBC5BDF32E45A708003A0D64 /* SwiftUIUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIUtils.swift; sourceTree = "<group>"; };
 		BBCFAE3F2C266234002E1516 /* FirstTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstTimeView.swift; sourceTree = "<group>"; };
@@ -541,6 +547,7 @@
 				27DC8C162CFA4DA7005F8F31 /* Formatters */,
 				BB3D6EAF2C84E58000FFE584 /* NSScreen.swift */,
 				BBBD4AF42C8D671A0074FFCF /* NSImage.swift */,
+				4FF9375D56895CE225D9A62E /* NSPanel.swift */,
 				3A1622B32C8C099200D318EE /* Button Styles */,
 				BB04405F2C77AD27009F1D33 /* CodableColor.swift */,
 				05C0C7172C60629C000ADAC6 /* AXUIElement.swift */,
@@ -609,6 +616,7 @@
 			isa = PBXGroup;
 			children = (
 				AA11001122334455AA110055 /* DockLockerGeometryTests.swift */,
+				45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */,
 				D00D4B366E3CF5338182E065 /* NativeTabGroupingTests.swift */,
 			);
 			path = DockDoorTests;
@@ -723,6 +731,7 @@
 				BB157B7F2C0E8E6700997315 /* MessageUtil.swift */,
 				BB157B812C0EB29E00997315 /* DockObserver.swift */,
 				BBF6C6232C1B4B4400BF1D40 /* KeybindHelper.swift */,
+				A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */,
 				BBF6C6262C1B4B4500BF1D40 /* StringMatchingUtil.swift */,
 				BB1CBD5C2C1BCA4F003969BC /* Misc Utils.swift */,
 				F098F8107F464776B5C18294427CAECD /* ScriptCommands.swift */,
@@ -883,12 +892,20 @@
 			path = FluidGradient;
 			sourceTree = "<group>";
 		};
+		928FCA6A5F794EF4AD2E3063 /* Space Switcher */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = "Space Switcher";
+			sourceTree = "<group>";
+		};
 		BBA153FD2C12358600119C02 /* Views */ = {
 			isa = PBXGroup;
 			children = (
 				BBBD4AF12C8BDDC70074FFCF /* Intro */,
 				BB4B44492C372A42006680DC /* Hover Window */,
 				BBE7CC922C2244A600AB8F4D /* Settings */,
+				928FCA6A5F794EF4AD2E3063 /* Space Switcher */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1098,6 +1115,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA11001122334455AA110066 /* DockLockerGeometryTests.swift in Sources */,
+				431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */,
 				555110B7F7B99C7BD510DBC7 /* NativeTabGroupingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1179,6 +1197,7 @@
 				BB44474F2C507F950047EB92 /* LimitedTaskGroup.swift in Sources */,
 				BB22D7152DF9E24500EBBCA6 /* GlintPlaceholderModifier.swift in Sources */,
 				BBBD4AF52C8D671C0074FFCF /* NSImage.swift in Sources */,
+				52D1F256C850AF3384C73549 /* NSPanel.swift in Sources */,
 				BB04405E2C77A87F009F1D33 /* PreferencesProtocol.swift in Sources */,
 				27DC8C172CFA4DA7005F8F31 /* NumberFormatter+Convenience.swift in Sources */,
 				3A1622C72C8D5A5C00D318EE /* EnabledActionRowView.swift in Sources */,
@@ -1214,6 +1233,7 @@
 				BBA153FC2C12356100119C02 /* main.swift in Sources */,
 				BBC57AA82E3A6BED0078B262 /* DynamicWindowFrameModifier.swift in Sources */,
 				BBF6C6242C1B4B4400BF1D40 /* KeybindHelper.swift in Sources */,
+				083B8C48914A88BF8AA0C79D /* SwitcherScreenPlacement.swift in Sources */,
 				BBF6C6252C1B4B4500BF1D40 /* StringMatchingUtil.swift in Sources */,
 				BB638F1C2E0218D10010077D /* CalendarFullView.swift in Sources */,
 				0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */,

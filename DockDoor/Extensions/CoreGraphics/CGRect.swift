@@ -12,4 +12,10 @@ extension CGRect {
             height: size.height + 2 * value
         )
     }
+
+    /// Converts an AppKit rect (bottom-left origin) to Quartz/CG global
+    /// coordinates (top-left origin), given the primary screen's maxY.
+    func flippedToQuartz(primaryScreenMaxY: CGFloat) -> CGRect {
+        CGRect(x: origin.x, y: primaryScreenMaxY - maxY, width: width, height: height)
+    }
 }

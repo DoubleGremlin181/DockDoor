@@ -296,13 +296,13 @@ private class WindowSwitchingCoordinator {
     }
 
     private func getTargetScreenForSwitcher() -> NSScreen {
-        if Defaults[.windowSwitcherPlacementStrategy] == .pinnedToScreen,
-           let pinnedScreen = NSScreen.findScreen(byIdentifier: Defaults[.pinnedScreenIdentifier])
-        {
-            return pinnedScreen
-        }
-        let mouseLocation = DockObserver.getMousePosition()
-        return NSScreen.screenFromQuartzPoint(mouseLocation)
+        // .screenWithLastActiveWindow is deferred: showWindow resolves it via
+        // its nil-location path, so only the pinned screen is resolved here.
+        SwitcherScreenPlacement.resolve(
+            strategy: Defaults[.windowSwitcherPlacementStrategy],
+            pinnedIdentifier: Defaults[.pinnedScreenIdentifier],
+            resolveLastActiveWindow: false
+        ) ?? SwitcherScreenPlacement.mouseScreen()
     }
 
     @MainActor

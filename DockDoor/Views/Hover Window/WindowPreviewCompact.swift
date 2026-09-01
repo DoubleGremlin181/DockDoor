@@ -99,33 +99,12 @@ struct WindowPreviewCompact: View, Equatable {
             }
 
             if appearance.showAppHeader {
-                // Title content based on format
-                VStack(alignment: .leading, spacing: 2) {
-                    switch appearance.compactModeTitleFormat {
-                    case .appNameAndTitle:
-                        titleText(appName, isPrimary: true)
-                        // Show state instead of window title when minimized/hidden
-                        if let state = stateIndicator {
-                            stateText(state)
-                        } else if let title = windowTitle {
-                            titleText(title, isPrimary: false)
-                        }
-
-                    case .titleOnly:
-                        titleText(windowTitle ?? appName, isPrimary: true)
-                        // Show state below the title
-                        if let state = stateIndicator {
-                            stateText(state)
-                        }
-
-                    case .appNameOnly:
-                        titleText(appName, isPrimary: true)
-                        // Show state below app name
-                        if let state = stateIndicator {
-                            stateText(state)
-                        }
-                    }
-                }
+                CompactRowTitleStack(
+                    appName: appName,
+                    windowTitle: windowTitle,
+                    stateIndicator: stateIndicator,
+                    appearance: appearance
+                )
             }
 
             Spacer(minLength: 0)
@@ -211,6 +190,43 @@ struct WindowPreviewCompact: View, Equatable {
             handleWindowAction: handleWindowAction,
             onTap: onTap
         )
+    }
+}
+
+/// The icon-adjacent title stack shared by the Window Switcher's compact rows
+/// and the Space Switcher's window list, so both honor the compact-mode title
+/// format, overflow style, and minimized/hidden state labels identically.
+struct CompactRowTitleStack: View {
+    let appName: String
+    let windowTitle: String?
+    let stateIndicator: String?
+    let appearance: PreviewAppearanceSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            switch appearance.compactModeTitleFormat {
+            case .appNameAndTitle:
+                titleText(appName, isPrimary: true)
+                // Show state instead of window title when minimized/hidden
+                if let state = stateIndicator {
+                    stateText(state)
+                } else if let title = windowTitle {
+                    titleText(title, isPrimary: false)
+                }
+
+            case .titleOnly:
+                titleText(windowTitle ?? appName, isPrimary: true)
+                if let state = stateIndicator {
+                    stateText(state)
+                }
+
+            case .appNameOnly:
+                titleText(appName, isPrimary: true)
+                if let state = stateIndicator {
+                    stateText(state)
+                }
+            }
+        }
     }
 
     @ViewBuilder
