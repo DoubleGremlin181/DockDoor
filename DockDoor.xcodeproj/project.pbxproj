@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		EE6D378B10134DEDA83A13F4 /* ShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADDE72D517BF4535A016BA0A /* ShortcutRecorder.swift */; };
+		04BD318C42EC4FC1970218EB /* KeybindConflictsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D842FBCDEA749F39D3C3283 /* KeybindConflictsTests.swift */; };
 		431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */; };
 		FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */; };
 		894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */; };
@@ -254,6 +255,7 @@
 
 /* Begin PBXFileReference section */
 		ADDE72D517BF4535A016BA0A /* ShortcutRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorder.swift; sourceTree = "<group>"; };
+		6D842FBCDEA749F39D3C3283 /* KeybindConflictsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeybindConflictsTests.swift; sourceTree = "<group>"; };
 		45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacementTests.swift; sourceTree = "<group>"; };
 		73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngineTests.swift; sourceTree = "<group>"; };
 		3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherDisplayOrderTests.swift; sourceTree = "<group>"; };
@@ -647,6 +649,7 @@
 			isa = PBXGroup;
 			children = (
 				AA11001122334455AA110055 /* DockLockerGeometryTests.swift */,
+				6D842FBCDEA749F39D3C3283 /* KeybindConflictsTests.swift */,
 				45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */,
 				73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */,
 				3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */,
@@ -1160,6 +1163,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA11001122334455AA110066 /* DockLockerGeometryTests.swift in Sources */,
+				04BD318C42EC4FC1970218EB /* KeybindConflictsTests.swift in Sources */,
 				431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */,
 				FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */,
 				894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */,
