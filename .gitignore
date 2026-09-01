@@ -99,3 +99,5 @@ node_modules/
 kilo.md
 CLAUDE.local.md
 .release.json
+# Coverage artifacts
+*.profraw
