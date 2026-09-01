@@ -167,6 +167,25 @@ extension Defaults.Keys {
     static let Int64maskAlternate = Key<Int>("Int64maskAlternate", default: 524_576)
     static let UserKeybind = Key<UserKeyBind>("UserKeybind", default: UserKeyBind(keyCode: 48, modifierFlags: Defaults[.Int64maskAlternate]))
 
+    // MARK: - Space Switcher
+
+    static let enableSpaceSwitcher = Key<Bool>("enableSpaceSwitcher", default: false)
+    static let spaceSwitcherKeybind = Key<UserKeyBind>("spaceSwitcherKeybind", default: UserKeyBind(keyCode: 48, modifierFlags: Defaults[.Int64maskAlternate]))
+    static let spaceSwitcherMoveWindowKeyCode = Key<UInt16>("spaceSwitcherMoveWindowKeyCode", default: 46) // M
+    static let spaceSwitcherPreviewStyle = Key<SpaceSwitcherPreviewStyle>("spaceSwitcherPreviewStyle", default: .composite)
+    static let spaceSwitcherCardWidth = Key<CGFloat>("spaceSwitcherCardWidth", default: 220)
+    static let spaceSwitcherShowSpaceLabels = Key<Bool>("spaceSwitcherShowSpaceLabels", default: true)
+    static let spaceSwitcherStayOpenOnRelease = Key<Bool>("spaceSwitcherStayOpenOnRelease", default: false)
+    static let spaceSwitcherWarpCursor = Key<Bool>("spaceSwitcherWarpCursor", default: false)
+    static let spaceSwitcherStartOnSecondSpace = Key<Bool>("spaceSwitcherStartOnSecondSpace", default: true)
+    static let spaceSwitcherPlacementStrategy = Key<WindowSwitcherPlacementStrategy>("spaceSwitcherPlacementStrategy", default: .screenWithMouse)
+    /// Empty default like pinnedScreenIdentifier: the settings picker backfills
+    /// the current screen's identifier when Pinned is first selected, and
+    /// findScreen(byIdentifier: "") falls through to the mouse screen.
+    static let spaceSwitcherPinnedScreenIdentifier = Key<String>("spaceSwitcherPinnedScreenIdentifier", default: "")
+    static let spaceSwitcherDisplayOrder = Key<SpaceSwitcherDisplayOrder>("spaceSwitcherDisplayOrder", default: .mainDisplayFirst)
+    static let spaceSwitcherShowDisplayNames = Key<Bool>("spaceSwitcherShowDisplayNames", default: true)
+
     static let showAppName = Key<Bool>("showAppName", default: true)
     static let appNameStyle = Key<AppNameStyle>("appNameStyle", default: .default)
     static let selectionOpacity = Key<CGFloat>("selectionOpacity", default: 0.4)
@@ -958,6 +977,78 @@ enum WindowPreviewSortOrder: String, CaseIterable, Defaults.Serializable, Identi
             true
         default:
             false
+        }
+    }
+}
+
+/// How display rows are stacked in the Space Switcher panel when more than
+/// one display has its own Spaces.
+enum SpaceSwitcherDisplayOrder: String, CaseIterable, Defaults.Serializable, Identifiable {
+    case mainDisplayFirst
+    case leftToRight
+    case topToBottom
+    case displayWithMouseFirst
+    case displayWithActiveWindowFirst
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .mainDisplayFirst:
+            String(localized: "Main display first", comment: "Space Switcher display row order option")
+        case .leftToRight:
+            String(localized: "Left to right", comment: "Space Switcher display row order option")
+        case .topToBottom:
+            String(localized: "Top to bottom", comment: "Space Switcher display row order option")
+        case .displayWithMouseFirst:
+            String(localized: "Display with mouse first", comment: "Space Switcher display row order option")
+        case .displayWithActiveWindowFirst:
+            String(localized: "Display with active window first", comment: "Space Switcher display row order option")
+        }
+    }
+
+    var localizedDescription: String {
+        switch self {
+        case .mainDisplayFirst:
+            String(localized: "The display with the menu bar is the first row; the rest follow left to right.", comment: "Space Switcher display row order description")
+        case .leftToRight:
+            String(localized: "Rows follow the physical arrangement from left to right.", comment: "Space Switcher display row order description")
+        case .topToBottom:
+            String(localized: "Rows follow the physical arrangement from top to bottom.", comment: "Space Switcher display row order description")
+        case .displayWithMouseFirst:
+            String(localized: "The display under the cursor is the first row when the switcher opens.", comment: "Space Switcher display row order description")
+        case .displayWithActiveWindowFirst:
+            String(localized: "The display showing the active window is the first row when the switcher opens.", comment: "Space Switcher display row order description")
+        }
+    }
+}
+
+enum SpaceSwitcherPreviewStyle: String, CaseIterable, Defaults.Serializable, Identifiable {
+    case composite
+    case exploded
+    case windowList
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .composite:
+            String(localized: "Mini desktop", comment: "Space Switcher preview style")
+        case .exploded:
+            String(localized: "Exploded", comment: "Space Switcher preview style (Mission Control-like layout)")
+        case .windowList:
+            String(localized: "Window list", comment: "Space Switcher preview style")
+        }
+    }
+
+    var localizedDescription: String {
+        switch self {
+        case .composite:
+            String(localized: "Window thumbnails at their real positions on each Space", comment: "Space Switcher preview style description")
+        case .exploded:
+            String(localized: "Windows spread out without overlapping, like Mission Control", comment: "Space Switcher preview style description")
+        case .windowList:
+            String(localized: "Window rows styled like the Window Switcher's compact mode; rows can be dragged between Spaces", comment: "Space Switcher preview style description")
         }
     }
 }
