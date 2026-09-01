@@ -10,7 +10,7 @@ private class KeybindHelperUserInfo {
     }
 }
 
-struct UserKeyBind: Codable, Defaults.Serializable {
+struct UserKeyBind: Codable, Equatable, Defaults.Serializable {
     var keyCode: UInt16
     var modifierFlags: Int
 }
@@ -346,6 +346,12 @@ private class WindowSwitchingCoordinator {
 class KeybindHelper {
     private let previewCoordinator: SharedPreviewWindowCoordinator
     private let windowSwitchingCoordinator = WindowSwitchingCoordinator()
+    private let spaceSwitchingCoordinator = SpaceSwitchingCoordinator()
+
+    private var isSpaceModifierKeyPressed: Bool = false
+    private var hasProcessedSpaceModifierRelease: Bool = false
+    /// Tap-thread mirror of the space switcher session, parallel to `switcherSessionActive`.
+    private var spaceSwitcherSessionActive: Bool = false
 
     private var isSwitcherModifierKeyPressed: Bool = false
     private var isShiftKeyPressedGeneral: Bool = false
@@ -371,6 +377,9 @@ class KeybindHelper {
 
     init(previewCoordinator: SharedPreviewWindowCoordinator) {
         self.previewCoordinator = previewCoordinator
+        spaceSwitchingCoordinator.onSessionEnd = { [weak self] in
+            self?.spaceSwitcherSessionActive = false
+        }
         setupEventTap()
         startMonitoring()
     }
@@ -401,6 +410,13 @@ class KeybindHelper {
         isShiftKeyPressedGeneral = false
         preventSwitcherHideOnRelease = false
         currentInvocationMode = .allWindows
+        isSpaceModifierKeyPressed = false
+        hasProcessedSpaceModifierRelease = false
+        spaceSwitcherSessionActive = false
+        Task { @MainActor [weak self] in
+            guard let self, spaceSwitchingCoordinator.isSessionActive else { return }
+            spaceSwitchingCoordinator.cancel()
+        }
         cancelHeldKeyRepeatTask()
     }
 
@@ -504,13 +520,7 @@ class KeybindHelper {
 
             var effectiveSwitcherModifierIsPressed = currentSwitcherModifierIsPressed
             if switcherSessionActive {
-                let saved = keyBoardShortcutSaved.modifierFlags
-                let f = event.flags
-                let requiredModifiersHeld =
-                    ((saved & Int(CGEventFlags.maskAlternate.rawValue)) == 0 || f.contains(.maskAlternate)) &&
-                    ((saved & Int(CGEventFlags.maskControl.rawValue)) == 0 || f.contains(.maskControl)) &&
-                    ((saved & Int(CGEventFlags.maskCommand.rawValue)) == 0 || f.contains(.maskCommand))
-                if requiredModifiersHeld {
+                if Self.chordModifiersHeld(keyBoardShortcutSaved.modifierFlags, flags: event.flags) {
                     effectiveSwitcherModifierIsPressed = true
                 } else {
                     switcherSessionActive = false
@@ -521,9 +531,32 @@ class KeybindHelper {
                 self?.handleModifierEvent(currentSwitcherModifierIsPressed: effectiveSwitcherModifierIsPressed, currentShiftState: currentShiftState)
             }
 
+            if Defaults[.enableSpaceSwitcher] {
+                let spaceKeybind = Defaults[.spaceSwitcherKeybind]
+                var spaceModifierIsPressed = spaceKeybind.modifierFlags != 0 &&
+                    Self.modifierFlagsMatch(spaceKeybind.modifierFlags, flags: event.flags, ignoring: Self.backwardFlagToIgnore(for: spaceKeybind))
+                if spaceSwitcherSessionActive {
+                    if Self.chordModifiersHeld(spaceKeybind.modifierFlags, flags: event.flags) {
+                        spaceModifierIsPressed = true
+                    } else if !Defaults[.spaceSwitcherStayOpenOnRelease] {
+                        spaceSwitcherSessionActive = false
+                    }
+                }
+
+                Task { @MainActor [weak self] in
+                    self?.handleSpaceModifierEvent(isPressed: spaceModifierIsPressed)
+                }
+            }
+
         case .keyDown:
             let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
             let flags = event.flags
+
+            // Settings is recording a shortcut: hand it the chord instead of acting on it.
+            if ShortcutRecorder.shared.handleKeyDown(keyCode: keyCode, flags: flags) {
+                return nil
+            }
+
             let shouldRouteCmdTabToWindowSwitcher = isCmdTabWindowSwitcherKeybind(keyCode: keyCode, flags: flags)
 
             // Consume bare spacebar for a visible media preview so it doesn't also reach the focused app and double-toggle playback.
@@ -697,6 +730,26 @@ class KeybindHelper {
             if shouldConsume { return nil }
 
         case .leftMouseDown:
+            if spaceSwitcherSessionActive {
+                // Use the event's own location (CG, top-left origin) rather than
+                // NSEvent.mouseLocation: for synthetic clicks the hardware cursor
+                // may not have moved to the click point yet.
+                let clickCG = event.location
+                var insidePanel = false
+                if let panelFrame = spaceSwitchingCoordinator.visiblePanelFrame,
+                   let primaryMaxY = NSScreen.screens.first?.frame.maxY
+                {
+                    insidePanel = panelFrame.flippedToQuartz(primaryScreenMaxY: primaryMaxY).contains(clickCG)
+                }
+                if !insidePanel {
+                    spaceSwitcherSessionActive = false
+                    Task { @MainActor in
+                        self.hasProcessedSpaceModifierRelease = true
+                        self.spaceSwitchingCoordinator.cancel()
+                    }
+                }
+            }
+
             let isWindowSwitcherActive = previewCoordinator.windowSwitcherCoordinator.windowSwitcherActive
             let isCmdTabActive = DockObserver.isCmdTabSwitcherActive
 
@@ -756,10 +809,26 @@ class KeybindHelper {
         }
     }
 
+    /// True when a DockDoor switcher (Window or Space) owns the Cmd+Tab chord in `flags`,
+    /// so the system app switcher must not be observed or deferred to for this event.
     private func isCmdTabWindowSwitcherKeybind(keyCode: Int64, flags: CGEventFlags) -> Bool {
         guard keyCode == Int64(kVK_Tab), flags.contains(.maskCommand) else { return false }
-        guard usesCmdTabWindowSwitcherKeybind() else { return false }
-        return modifierFlagsMatch(Defaults[.UserKeybind].modifierFlags, flags: flags)
+        if usesCmdTabWindowSwitcherKeybind(), Self.modifierFlagsMatch(Defaults[.UserKeybind].modifierFlags, flags: flags) {
+            return true
+        }
+        let spaceKeybind = Defaults[.spaceSwitcherKeybind]
+        if usesCmdTabSpaceSwitcherKeybind(), Self.modifierFlagsMatch(spaceKeybind.modifierFlags, flags: flags, ignoring: Self.backwardFlagToIgnore(for: spaceKeybind)) {
+            return true
+        }
+        return false
+    }
+
+    /// The shared Backward Key, when it is a modifier that is *not* part of the
+    /// bind's own chord, may be held during activation to cycle backward.
+    /// Internal for testing.
+    static func backwardFlagToIgnore(for bind: UserKeyBind) -> CGEventFlags? {
+        guard let flag = eventFlagForKeyCode(Defaults[.switcherBackwardKeyCode]) else { return nil }
+        return (bind.modifierFlags & Int(flag.rawValue)) != 0 ? nil : flag
     }
 
     private func usesCmdTabWindowSwitcherKeybind() -> Bool {
@@ -772,14 +841,32 @@ class KeybindHelper {
         return keybind.keyCode == UInt16(kVK_Tab) || Defaults[.alternateKeybindKey] == UInt16(kVK_Tab)
     }
 
-    private func modifierFlagsMatch(_ saved: Int, flags: CGEventFlags) -> Bool {
+    private func usesCmdTabSpaceSwitcherKeybind() -> Bool {
+        guard Defaults[.enableSpaceSwitcher] else { return false }
+        let keybind = Defaults[.spaceSwitcherKeybind]
+        let usesCommand = (keybind.modifierFlags & Int(CGEventFlags.maskCommand.rawValue)) != 0
+        return usesCommand && keybind.keyCode == UInt16(kVK_Tab)
+    }
+
+    /// Exact Alt/Ctrl/Cmd match, optionally ignoring one modifier (the shared
+    /// Backward Key when it is itself a modifier). Internal for testing.
+    static func modifierFlagsMatch(_ saved: Int, flags: CGEventFlags, ignoring: CGEventFlags? = nil) -> Bool {
         let wantsAlt = (saved & Int(CGEventFlags.maskAlternate.rawValue)) != 0
         let wantsCtrl = (saved & Int(CGEventFlags.maskControl.rawValue)) != 0
         let wantsCmd = (saved & Int(CGEventFlags.maskCommand.rawValue)) != 0
 
-        return wantsAlt == flags.contains(.maskAlternate) &&
-            wantsCtrl == flags.contains(.maskControl) &&
-            wantsCmd == flags.contains(.maskCommand)
+        return (ignoring == .maskAlternate || wantsAlt == flags.contains(.maskAlternate)) &&
+            (ignoring == .maskControl || wantsCtrl == flags.contains(.maskControl)) &&
+            (ignoring == .maskCommand || wantsCmd == flags.contains(.maskCommand))
+    }
+
+    /// True when every Alt/Ctrl/Cmd modifier in the saved chord is still held
+    /// (extra modifiers allowed), used to keep an active switcher session alive
+    /// across flagsChanged events. Internal for testing.
+    static func chordModifiersHeld(_ saved: Int, flags: CGEventFlags) -> Bool {
+        ((saved & Int(CGEventFlags.maskAlternate.rawValue)) == 0 || flags.contains(.maskAlternate)) &&
+            ((saved & Int(CGEventFlags.maskControl.rawValue)) == 0 || flags.contains(.maskControl)) &&
+            ((saved & Int(CGEventFlags.maskCommand.rawValue)) == 0 || flags.contains(.maskCommand))
     }
 
     private func updateModifierStatesFromFlags(event: CGEvent, keyBoardShortcutSaved: UserKeyBind) -> (currentSwitcherModifierIsPressed: Bool, currentShiftState: Bool) {
@@ -905,6 +992,13 @@ class KeybindHelper {
         let keyBoardShortcutSaved: UserKeyBind = Defaults[.UserKeybind]
         let previewIsCurrentlyVisible = previewCoordinator.isVisible || switcherSessionActive
 
+        if spaceSwitcherSessionActive {
+            if let result = determineActionForSpaceSwitcherKeyDown(keyCode: keyCode, flags: flags) {
+                return result
+            }
+            return (false, nil)
+        }
+
         if previewIsCurrentlyVisible {
             if keyCode == kVK_Escape {
                 switcherSessionActive = false
@@ -945,6 +1039,40 @@ class KeybindHelper {
         let hasCtrl = flags.contains(.maskControl)
         let hasCmd = flags.contains(.maskCommand)
         let isDesiredModifierPressedNow = (wantsAlt == hasAlt) && (wantsCtrl == hasCtrl) && (wantsCmd == hasCmd)
+
+        // Space Switcher activation. Checked before the window switcher's exact-match
+        // guard (which returns early even when disabled) but explicitly yields to the
+        // window switcher whenever both features claim the same keybind.
+        if Defaults[.enableSpaceSwitcher] {
+            let spaceKeybind = Defaults[.spaceSwitcherKeybind]
+            if !KeybindConflicts.windowSwitcherClaims(spaceKeybind),
+               !switcherSessionActive,
+               !previewCoordinator.windowSwitcherCoordinator.windowSwitcherActive,
+               spaceKeybind.modifierFlags != 0,
+               keyCode == Int64(spaceKeybind.keyCode),
+               Self.modifierFlagsMatch(spaceKeybind.modifierFlags, flags: flags, ignoring: Self.backwardFlagToIgnore(for: spaceKeybind))
+            {
+                if WindowUtil.shouldIgnoreKeybindForFrontmostApp() {
+                    DebugLogger.log("SpaceSwitcher", details: "ignored: frontmost app blacklist/fullscreen")
+                    return (false, nil)
+                }
+                // Mission Control owns space switching while it is up: the Dock
+                // ignores our synthesized gesture and the panel cannot be shown
+                // reliably, so leave the chord to the system.
+                if WindowSpaces.isMissionControlActive() {
+                    DebugLogger.log("SpaceSwitcher", details: "ignored: Mission Control active")
+                    return (false, nil)
+                }
+                spaceSwitcherSessionActive = true
+                let backwardFlag = Self.eventFlagForKeyCode(Defaults[.switcherBackwardKeyCode])
+                let isShiftPressed = backwardFlag.map { flags.contains($0) } ?? false
+                return (true, { @MainActor in
+                    self.hasProcessedSpaceModifierRelease = false
+                    self.isSpaceModifierKeyPressed = true
+                    self.spaceSwitchingCoordinator.handleActivation(isShiftPressed: isShiftPressed)
+                })
+            }
+        }
 
         let isExactSwitcherShortcutPressed = (isDesiredModifierPressedNow && keyCode == keyBoardShortcutSaved.keyCode) ||
             (!isDesiredModifierPressedNow && keyBoardShortcutSaved.modifierFlags == 0 && keyCode == keyBoardShortcutSaved.keyCode)
@@ -1184,6 +1312,112 @@ class KeybindHelper {
                 isShiftPressed: shiftPressedForActivation,
                 mode: mode
             )
+        }
+    }
+
+    private func determineActionForSpaceSwitcherKeyDown(keyCode: Int64, flags: CGEventFlags) -> (shouldConsume: Bool, actionTask: (() async -> Void)?)? {
+        // Only consume chords whose modifiers belong to the space keybind (plus
+        // shift), so foreign shortcuts like the system Cmd+Tab pass through in
+        // stay-open mode instead of being hijacked.
+        let saved = Defaults[.spaceSwitcherKeybind].modifierFlags
+        let backwardKeyCode = Defaults[.switcherBackwardKeyCode]
+        let backwardFlag = Self.eventFlagForKeyCode(backwardKeyCode)
+        var allowedModifiers: CGEventFlags = [.maskShift, .maskAlphaShift, .maskNumericPad]
+        if (saved & Int(CGEventFlags.maskAlternate.rawValue)) != 0 {
+            allowedModifiers.insert(.maskAlternate)
+        }
+        if (saved & Int(CGEventFlags.maskControl.rawValue)) != 0 {
+            allowedModifiers.insert(.maskControl)
+        }
+        if (saved & Int(CGEventFlags.maskCommand.rawValue)) != 0 {
+            allowedModifiers.insert(.maskCommand)
+        }
+        if let backwardFlag {
+            allowedModifiers.insert(backwardFlag)
+        }
+        let activeModifiers = flags.intersection([.maskControl, .maskCommand, .maskAlternate, .maskShift])
+        guard activeModifiers.subtracting(allowedModifiers).isEmpty else { return nil }
+
+        if keyCode == Int64(kVK_Escape) {
+            spaceSwitcherSessionActive = false
+            return (true, { @MainActor in
+                self.hasProcessedSpaceModifierRelease = true
+                self.spaceSwitchingCoordinator.cancel()
+            })
+        }
+
+        // Shared Backward Key: a modifier (Shift by default) reverses the trigger
+        // key; a regular key steps backward on its own, as in the Window Switcher.
+        if keyCode == Int64(Defaults[.spaceSwitcherKeybind].keyCode) {
+            let isBackward = backwardFlag.map { flags.contains($0) } ?? false
+            return (true, { @MainActor in
+                self.spaceSwitchingCoordinator.handleActivation(isShiftPressed: isBackward)
+            })
+        }
+
+        if backwardFlag == nil, keyCode == Int64(backwardKeyCode) {
+            return (true, { @MainActor in
+                self.spaceSwitchingCoordinator.handleActivation(isShiftPressed: true)
+            })
+        }
+
+        if keyCode == Int64(Defaults[.spaceSwitcherMoveWindowKeyCode]) {
+            return (true, { @MainActor in
+                self.spaceSwitchingCoordinator.moveFrontmostWindowToSelectedSpace()
+            })
+        }
+
+        var direction: ArrowDirection? = switch keyCode {
+        case Int64(kVK_LeftArrow): .left
+        case Int64(kVK_RightArrow): .right
+        case Int64(kVK_UpArrow): .up
+        case Int64(kVK_DownArrow): .down
+        default: nil
+        }
+        if direction == nil, Defaults[.enableVimMotions] {
+            direction = switch keyCode {
+            case Int64(kVK_ANSI_H): .left
+            case Int64(kVK_ANSI_L): .right
+            case Int64(kVK_ANSI_K): .up
+            case Int64(kVK_ANSI_J): .down
+            default: nil
+            }
+        }
+        if let direction {
+            return (true, { @MainActor in
+                self.spaceSwitchingCoordinator.navigate(direction)
+            })
+        }
+
+        // Shared Selection Key (Return by default); keypad Enter always commits.
+        if keyCode == Int64(Defaults[.windowSwitcherSelectionKeyCode]) || keyCode == Int64(kVK_ANSI_KeypadEnter) {
+            spaceSwitcherSessionActive = false
+            return (true, { @MainActor in
+                self.hasProcessedSpaceModifierRelease = true
+                self.spaceSwitchingCoordinator.commitSelection()
+            })
+        }
+
+        return nil
+    }
+
+    @MainActor
+    private func handleSpaceModifierEvent(isPressed: Bool) {
+        let oldState = isSpaceModifierKeyPressed
+        isSpaceModifierKeyPressed = isPressed
+
+        if !oldState, isPressed {
+            hasProcessedSpaceModifierRelease = false
+        }
+
+        if oldState, !isPressed, !hasProcessedSpaceModifierRelease {
+            hasProcessedSpaceModifierRelease = true
+            // Stay-open mode: releasing the modifier leaves the switcher up;
+            // Enter/click commits, Escape or clicking outside dismisses.
+            guard !Defaults[.spaceSwitcherStayOpenOnRelease] else { return }
+            if spaceSwitchingCoordinator.isSessionActive {
+                spaceSwitchingCoordinator.commitSelection()
+            }
         }
     }
 

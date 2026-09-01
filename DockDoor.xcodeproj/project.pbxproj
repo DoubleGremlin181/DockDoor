@@ -106,6 +106,7 @@
 		BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */; };
 		3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */; };
 		E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */; };
+		68DC9AFCF936449CAB4D17F3 /* SpaceSwitchingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42BF162A1E044DC8AB9D347 /* SpaceSwitchingCoordinator.swift */; };
 		4F2F74E019764064984AC616 /* SpaceSwitcherPanelCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D6135D44C2488E9C16F67E /* SpaceSwitcherPanelCoordinator.swift */; };
 		1A8FABBDC6F74C7ABA6B9B01 /* SpaceSwitcherState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5728EDAB9FC248F792DE1474 /* SpaceSwitcherState.swift */; };
 		7B5843F6CD19422BA0FADD98 /* SpaceSwitcherContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43542F5DA154FF1A81E21DD /* SpaceSwitcherContainer.swift */; };
@@ -350,6 +351,7 @@
 		BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDiscoveryShared.swift; sourceTree = "<group>"; };
 		E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceInfo.swift; sourceTree = "<group>"; };
 		686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngine.swift; sourceTree = "<group>"; };
+		A42BF162A1E044DC8AB9D347 /* SpaceSwitchingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitchingCoordinator.swift; sourceTree = "<group>"; };
 		B2D6135D44C2488E9C16F67E /* SpaceSwitcherPanelCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherPanelCoordinator.swift; sourceTree = "<group>"; };
 		5728EDAB9FC248F792DE1474 /* SpaceSwitcherState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherState.swift; sourceTree = "<group>"; };
 		F43542F5DA154FF1A81E21DD /* SpaceSwitcherContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherContainer.swift; sourceTree = "<group>"; };
@@ -758,6 +760,7 @@
 				71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */,
 				A48939467CC1F44BD27FA234 /* SwitcherScreenPlacement.swift */,
 				ADDE72D517BF4535A016BA0A /* ShortcutRecorder.swift */,
+				A42BF162A1E044DC8AB9D347 /* SpaceSwitchingCoordinator.swift */,
 				BBF6C6262C1B4B4500BF1D40 /* StringMatchingUtil.swift */,
 				BB1CBD5C2C1BCA4F003969BC /* Misc Utils.swift */,
 				F098F8107F464776B5C18294427CAECD /* ScriptCommands.swift */,
@@ -1257,6 +1260,7 @@
 				BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */,
 				3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */,
 				E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */,
+				68DC9AFCF936449CAB4D17F3 /* SpaceSwitchingCoordinator.swift in Sources */,
 				4F2F74E019764064984AC616 /* SpaceSwitcherPanelCoordinator.swift in Sources */,
 				1A8FABBDC6F74C7ABA6B9B01 /* SpaceSwitcherState.swift in Sources */,
 				7B5843F6CD19422BA0FADD98 /* SpaceSwitcherContainer.swift in Sources */,

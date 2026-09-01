@@ -72,7 +72,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             appClosureObserver = WindowManipulationObservers(previewCoordinator: currentPreviewCoordinator)
 
-            if Defaults[.enableWindowSwitcher] || Defaults[.enableCmdTabEnhancements] {
+            if Defaults[.enableSpaceSwitcher], let moved = KeybindConflicts.resolveSpaceKeybindOnEnable() {
+                // Stored shortcut predates conflict validation; the Window Switcher keeps it.
+                DebugLogger.log("SpaceSwitcher", details: "shortcut moved to \(KeybindConflicts.describe(moved)) to avoid the Window Switcher's")
+            }
+            if Defaults[.enableWindowSwitcher] || Defaults[.enableCmdTabEnhancements] || Defaults[.enableSpaceSwitcher] {
                 keybindHelper = KeybindHelper(previewCoordinator: currentPreviewCoordinator)
             }
 
