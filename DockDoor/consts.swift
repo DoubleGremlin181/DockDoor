@@ -251,7 +251,10 @@ extension Defaults.Keys {
     static let windowSwitcherAnchorToTop = Key<Bool>("windowSwitcherAnchorToTop", default: false)
     static let enableShiftWindowSwitcherPlacement = Key<Bool>("enableShiftWindowSwitcherPlacement", default: false)
     static let dockPreviewControlPosition = Key<WindowSwitcherControlPosition>("dockPreviewControlPosition", default: .topTrailing)
-    static let pinnedScreenIdentifier = Key<String>("pinnedScreenIdentifier", default: NSScreen.main?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? String ?? "")
+    /// The settings picker stores NSScreen.uniqueIdentifier() values; the old
+    /// NSScreenNumber-based default here was an NSNumber cast to String that
+    /// always failed, so the effective default has always been "".
+    static let pinnedScreenIdentifier = Key<String>("pinnedScreenIdentifier", default: "")
 
     // MARK: - Mouse Follows Focus
 
