@@ -420,28 +420,54 @@ enum SpaceSwitcherEngine {
         let originSpaceID = display.currentSpaceID
         let focusTarget = model.windowsBySpace[space.id]?.first(where: { !$0.isSticky && $0.info != nil })?.info
         let velocity = Defaults[.spaceSwitcherAnimationSpeed].gestureVelocity
+        let steps = stepCount(from: originSpaceID, to: space.id, on: display)
+        let canFocus = focusTarget != nil && switchesSpaceOnActivation
 
-        if let velocity {
-            // Dock swipe at the chosen speed; falls back to focusing a window
-            // on the Space, then to CGS.
-            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: velocity)
-        } else if let focusTarget, switchesSpaceOnActivation {
-            // macOS default: focus the Space's frontmost window and let the
-            // system slide there in one motion, however far away it is.
+        if let velocity, steps == 1 || !canFocus {
+            // Adjacent switch at the chosen speed — or a walk, when there is
+            // no window on the target to focus. Falls back to focusing a
+            // window on the Space, then to CGS.
+            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: velocity, retried: false)
+        } else if let focusTarget, canFocus {
+            // Direct jump: focus the Space's frontmost window and let macOS
+            // slide there in one motion, however far away it is — a Dock
+            // gesture can only move one Space at a time and would show every
+            // desktop in between.
             focusTarget.bringToFront()
-            verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 500_000_000) {
+            verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, onPath: [], after: 500_000_000) { _ in
                 DebugLogger.log("SpaceSwitcherEngine", details: "focus did not switch; gesture fallback to \(space.id)")
-                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: originSpaceID, focusTarget: nil, velocity: fallbackVelocity)
+                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: originSpaceID, focusTarget: nil, velocity: velocity ?? fallbackVelocity, retried: false)
             }
         } else {
-            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: fallbackVelocity)
+            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: fallbackVelocity, retried: false)
         }
         // The Space change this causes is observed like any other; the window
         // cache refresh that follows it is not repeated here.
     }
 
+    /// Number of Spaces between the current one and the target on a display
+    private static func stepCount(from origin: CGSSpaceID?, to target: CGSSpaceID, on display: DisplaySpaces) -> Int {
+        guard let origin,
+              let from = display.spaces.firstIndex(where: { $0.id == origin }),
+              let to = display.spaces.firstIndex(where: { $0.id == target })
+        else { return 1 }
+        return abs(to - from)
+    }
+
+    /// Spaces strictly between origin and target on a display: where a
+    /// multi-step walk lands when the Dock drops a swipe.
+    private static func spacesOnPath(from origin: CGSSpaceID?, to target: CGSSpaceID, on display: DisplaySpaces) -> Set<CGSSpaceID> {
+        guard let origin,
+              let from = display.spaces.firstIndex(where: { $0.id == origin }),
+              let to = display.spaces.firstIndex(where: { $0.id == target }),
+              abs(to - from) > 1
+        else { return [] }
+        let range = from < to ? (from + 1) ..< to : (to + 1) ..< from
+        return Set(display.spaces[range].map(\.id))
+    }
+
     @MainActor
-    private static func gestureThenVerify(space: SpaceInfo, on display: DisplaySpaces?, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, velocity: Double) {
+    private static func gestureThenVerify(space: SpaceInfo, on display: DisplaySpaces?, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, velocity: Double, retried: Bool) {
         guard let display = display ?? SpaceTopology.shared.spaces().display(for: space.displayIdentifier) else { return }
         WindowSpaces.switchViaDockGesture(
             to: space,
@@ -449,8 +475,14 @@ enum SpaceSwitcherEngine {
             keepCursor: Defaults[.spaceSwitcherWarpCursor],
             velocity: velocity
         )
-        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 900_000_000) {
-            if let focusTarget {
+        let onPath = spacesOnPath(from: display.currentSpaceID, to: space.id, on: display)
+        let walk = UInt64(max(1, stepCount(from: display.currentSpaceID, to: space.id, on: display))) * 40_000_000
+        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, onPath: onPath, after: 900_000_000 + walk) { landed in
+            if !retried, onPath.contains(landed) {
+                // Landed short: the Dock dropped a swipe. Walk the rest once.
+                DebugLogger.log("SpaceSwitcherEngine", details: "gesture landed short on \(landed); re-issuing the remaining steps to \(space.id)")
+                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: landed, focusTarget: focusTarget, velocity: velocity, retried: true)
+            } else if let focusTarget {
                 DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; bringToFront fallback wid=\(focusTarget.id)")
                 focusTarget.bringToFront()
             } else {
@@ -461,18 +493,20 @@ enum SpaceSwitcherEngine {
     }
 
     /// Runs `fallback` if, after the delay, the display is still on the
-    /// origin Space. Bails if a newer commit exists or the user navigated on
+    /// origin Space or on one of the Spaces on the way to the target. Bails
+    /// if a newer commit exists or the user navigated somewhere else on
     /// their own — never yank them around.
     @MainActor
-    private static func verifySwitch(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, after nanoseconds: UInt64, fallback: @escaping @MainActor () -> Void) {
+    private static func verifySwitch(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, onPath: Set<CGSSpaceID>, after nanoseconds: UInt64, fallback: @escaping @MainActor (CGSSpaceID) -> Void) {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: nanoseconds)
             guard generation == commitGeneration else { return }
             guard let current = SpaceTopology.shared.spaces().display(for: space.displayIdentifier),
-                  current.currentSpaceID != space.id,
-                  current.currentSpaceID == originSpaceID
+                  let landed = current.currentSpaceID,
+                  landed != space.id,
+                  landed == originSpaceID || onPath.contains(landed)
             else { return }
-            fallback()
+            fallback(landed)
         }
     }
 
