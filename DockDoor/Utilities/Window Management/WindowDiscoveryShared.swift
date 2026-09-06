@@ -768,15 +768,10 @@ enum WindowSpaces {
         static let phaseChanged: Int64 = 2
         static let phaseEnded: Int64 = 4
 
-        /// A completed swipe posted in one go (progress ±1, huge velocity) is
-        /// applied by the Dock as an instant cut. Driving the progress like a
-        /// finger does — eased over ~20 frames, slightly past a full space so
-        /// the last increment is tiny — makes the Dock render the slide.
-        static let frames = 20
-        static let frameInterval: TimeInterval = 0.016
-        static let overshoot = 1.3
-        static let velocity = 1000.0
-        static var duration: TimeInterval { frameInterval * Double(frames + 1) + 0.05 }
+        /// The Dock drops phases posted back to back; ~10 ms apart is enough.
+        static let phaseInterval: TimeInterval = 0.01
+        /// One began/changed/ended sequence per space
+        static var stepDuration: TimeInterval { phaseInterval * 3 }
     }
 
     /// Switches to a space by synthesizing Mission Control dock-swipe gestures.
@@ -785,7 +780,7 @@ enum WindowSpaces {
     /// The gesture applies to the display under the cursor, so the cursor is
     /// warped to the target display first and restored unless `keepCursor`.
     @discardableResult
-    static func switchViaDockGesture(to space: SpaceInfo, on display: DisplaySpaces, keepCursor: Bool) -> Bool {
+    static func switchViaDockGesture(to space: SpaceInfo, on display: DisplaySpaces, keepCursor: Bool, velocity: Double) -> Bool {
         guard let currentID = display.currentSpaceID,
               let currentIndex = display.spaces.firstIndex(where: { $0.id == currentID }),
               let targetIndex = display.spaces.firstIndex(where: { $0.id == space.id }),
@@ -818,43 +813,34 @@ enum WindowSpaces {
         let steps = abs(targetIndex - currentIndex)
         let sign: Double = targetIndex > currentIndex ? 1.0 : -1.0
 
-        // One animated swipe per space, each starting once the previous one
-        // has landed so the Dock never drops one mid-animation.
+        // One swipe per space, like InstantSpaceSwitcher: the velocity scales
+        // with the step count so a long jump takes about as long as a short one.
+        let stepVelocity = velocity * Double(steps)
         for step in 0 ..< steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * DockGesture.duration) {
-                postDockSwipe(sign: sign)
+            let offset = Double(step) * DockGesture.stepDuration
+            for (index, phase) in [DockGesture.phaseBegan, DockGesture.phaseChanged, DockGesture.phaseEnded].enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + offset + Double(index) * DockGesture.phaseInterval) {
+                    postSwipeEvent(phase: phase, sign: sign, velocity: stepVelocity)
+                }
             }
         }
 
         if let restorePoint, !keepCursor {
-            scheduleCursorRestore(to: restorePoint, delay: Double(steps) * DockGesture.duration + 0.1)
+            scheduleCursorRestore(to: restorePoint, delay: Double(steps) * DockGesture.stepDuration + 0.3)
         }
         return true
     }
 
-    /// Posts one swipe as a began / changed… / ended sequence with eased
-    /// progress, so the Dock animates the slide instead of cutting.
-    private static func postDockSwipe(sign: Double) {
-        postSwipeEvent(phase: DockGesture.phaseBegan, progress: 0, sign: sign)
-        for frame in 1 ... DockGesture.frames {
-            let t = Double(frame) / Double(DockGesture.frames)
-            let eased = 1 - (1 - t) * (1 - t)
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(frame) * DockGesture.frameInterval) {
-                postSwipeEvent(phase: DockGesture.phaseChanged, progress: DockGesture.overshoot * eased, sign: sign)
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Double(DockGesture.frames + 1) * DockGesture.frameInterval) {
-            postSwipeEvent(phase: DockGesture.phaseEnded, progress: DockGesture.overshoot, sign: sign)
-        }
-    }
-
-    private static func postSwipeEvent(phase: Int64, progress: Double, sign: Double) {
+    /// A near-zero progress with the velocity carrying the speed: the Dock
+    /// animates the whole slide itself, faster for higher velocities. A full
+    /// progress (±1) posted in one go is applied as an instant cut instead.
+    private static func postSwipeEvent(phase: Int64, sign: Double, velocity: Double) {
         guard let event = CGEvent(source: nil) else { return }
         event.setIntegerValueField(DockGesture.eventType, value: DockGesture.dockControl)
         event.setIntegerValueField(DockGesture.hidType, value: DockGesture.dockSwipe)
         event.setIntegerValueField(DockGesture.swipeMotion, value: DockGesture.horizontal)
-        event.setDoubleValueField(DockGesture.swipeProgress, value: sign * progress)
-        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * DockGesture.velocity)
+        event.setDoubleValueField(DockGesture.swipeProgress, value: sign * Double(Float.leastNonzeroMagnitude))
+        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * velocity)
         event.setIntegerValueField(DockGesture.gesturePhase, value: phase)
         event.post(tap: .cgSessionEventTap)
     }

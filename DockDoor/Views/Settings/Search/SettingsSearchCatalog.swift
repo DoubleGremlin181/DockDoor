@@ -646,6 +646,15 @@ enum SettingsSearchCatalog {
             icon: "ruler"
         ),
         SettingsSearchItem(
+            id: "spaceSwitcher.animationSpeed",
+            title: String(localized: "Animation speed"),
+            description: String(localized: "How fast the desktop slides when switching. The presets match InstantSpaceSwitcher; “macOS default” uses the system’s own animation by focusing a window on the selected Space."),
+            keywords: ["animation", "speed", "fast", "instant", "slide", "space", "switch", "InstantSpaceSwitcher"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Behavior"),
+            icon: "hare"
+        ),
+        SettingsSearchItem(
             id: "spaceSwitcher.rememberDisplayLayouts",
             title: String(localized: "Remember desktop layouts per display"),
             description: String(localized: "Uses what the Space Switcher already knows about your windows: when a display is unplugged its desktops are kept apart on the remaining display, and when it comes back its windows return to the desktops it has. Desktops are never created or removed."),

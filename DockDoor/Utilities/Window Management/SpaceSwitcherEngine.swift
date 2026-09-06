@@ -24,6 +24,22 @@ enum SpaceSwitcherEngine {
         var allSpaces: [SpaceInfo] {
             displays.flatMap(\.spaces)
         }
+
+        /// Same model with fresh thumbnails swapped in for the given windows.
+        func replacingImages(_ images: [CGWindowID: CGImage]) -> Model {
+            guard !images.isEmpty else { return self }
+            var updated = windowsBySpace
+            for (spaceID, windows) in updated {
+                updated[spaceID] = windows.map { window in
+                    guard let image = images[window.id] else { return window }
+                    return SpaceWindow(
+                        id: window.id, pid: window.pid, frame: window.frame, title: window.title, appName: window.appName,
+                        icon: window.icon, image: image, isSticky: window.isSticky, info: window.info
+                    )
+                }
+            }
+            return Model(displays: displays, windowsBySpace: updated)
+        }
     }
 
     private static let minWindowSize = CGSize(width: 80, height: 50)
@@ -376,20 +392,22 @@ enum SpaceSwitcherEngine {
         let generation = commitGeneration
         let originSpaceID = display.currentSpaceID
         let focusTarget = model.windowsBySpace[space.id]?.first(where: { !$0.isSticky && $0.info != nil })?.info
+        let velocity = Defaults[.spaceSwitcherAnimationSpeed].gestureVelocity
 
-        // Primary for non-empty Spaces: focus its frontmost window — macOS
-        // jumps straight to that Space in one slide, however far away it is,
-        // and the Dock stays in sync because it is an ordinary activation.
-        // Empty Spaces have nothing to focus, so they take the Dock-swipe
-        // gesture, one step per Space.
-        if let focusTarget, switchesSpaceOnActivation {
+        if let velocity {
+            // Dock swipe at the chosen speed (InstantSpaceSwitcher presets);
+            // falls back to focusing a window on the Space, then to CGS.
+            gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: velocity)
+        } else if let focusTarget, switchesSpaceOnActivation {
+            // macOS default: focus the Space's frontmost window and let the
+            // system slide there in one motion, however far away it is.
             focusTarget.bringToFront()
             verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 500_000_000) {
                 DebugLogger.log("SpaceSwitcherEngine", details: "focus did not switch; gesture fallback to \(space.id)")
-                gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: nil)
+                gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: nil, velocity: SpaceSwitcherAnimationSpeed.normal.gestureVelocity ?? 40)
             }
         } else {
-            gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget)
+            gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: SpaceSwitcherAnimationSpeed.normal.gestureVelocity ?? 40)
         }
 
         Task.detached(priority: .low) {
@@ -398,19 +416,16 @@ enum SpaceSwitcherEngine {
     }
 
     @MainActor
-    private static func gestureThenVerify(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?) {
+    private static func gestureThenVerify(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, velocity: Double) {
         let freshDisplays = WindowSpaces.displaySpacesSnapshot()
         guard let display = freshDisplays.first(where: { $0.identifier == space.displayIdentifier }) else { return }
         WindowSpaces.switchViaDockGesture(
             to: space,
             on: display,
-            keepCursor: Defaults[.spaceSwitcherWarpCursor]
+            keepCursor: Defaults[.spaceSwitcherWarpCursor],
+            velocity: velocity
         )
-        // Each animated step takes ~0.4 s; verify once the whole walk had time to land.
-        let currentIndex = display.spaces.firstIndex { $0.id == display.currentSpaceID } ?? 0
-        let targetIndex = display.spaces.firstIndex { $0.id == space.id } ?? currentIndex
-        let walk = UInt64(max(1, abs(targetIndex - currentIndex))) * 400_000_000
-        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: walk + 600_000_000) {
+        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 900_000_000) {
             if let focusTarget {
                 DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; bringToFront fallback wid=\(focusTarget.id)")
                 focusTarget.bringToFront()
