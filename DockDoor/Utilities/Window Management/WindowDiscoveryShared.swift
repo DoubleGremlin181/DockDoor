@@ -765,7 +765,18 @@ enum WindowSpaces {
         static let dockSwipe: Int64 = 23 // kIOHIDEventTypeDockSwipe
         static let horizontal: Int64 = 1 // kCGGestureMotionHorizontal
         static let phaseBegan: Int64 = 1
+        static let phaseChanged: Int64 = 2
         static let phaseEnded: Int64 = 4
+
+        /// A completed swipe posted in one go (progress ±1, huge velocity) is
+        /// applied by the Dock as an instant cut. Driving the progress like a
+        /// finger does — eased over ~20 frames, slightly past a full space so
+        /// the last increment is tiny — makes the Dock render the slide.
+        static let frames = 20
+        static let frameInterval: TimeInterval = 0.016
+        static let overshoot = 1.3
+        static let velocity = 1000.0
+        static var duration: TimeInterval { frameInterval * Double(frames + 1) + 0.05 }
     }
 
     /// Switches to a space by synthesizing Mission Control dock-swipe gestures.
@@ -807,30 +818,44 @@ enum WindowSpaces {
         let steps = abs(targetIndex - currentIndex)
         let sign: Double = targetIndex > currentIndex ? 1.0 : -1.0
 
-        // Stagger multi-step swipes slightly so the Dock doesn't drop swipes
-        // that arrive mid-animation on longer jumps.
+        // One animated swipe per space, each starting once the previous one
+        // has landed so the Dock never drops one mid-animation.
         for step in 0 ..< steps {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * 0.12) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(step) * DockGesture.duration) {
                 postDockSwipe(sign: sign)
             }
         }
 
         if let restorePoint, !keepCursor {
-            scheduleCursorRestore(to: restorePoint, delay: 0.35 + Double(steps - 1) * 0.12)
+            scheduleCursorRestore(to: restorePoint, delay: Double(steps) * DockGesture.duration + 0.1)
         }
         return true
     }
 
+    /// Posts one swipe as a began / changed… / ended sequence with eased
+    /// progress, so the Dock animates the slide instead of cutting.
     private static func postDockSwipe(sign: Double) {
+        postSwipeEvent(phase: DockGesture.phaseBegan, progress: 0, sign: sign)
+        for frame in 1 ... DockGesture.frames {
+            let t = Double(frame) / Double(DockGesture.frames)
+            let eased = 1 - (1 - t) * (1 - t)
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(frame) * DockGesture.frameInterval) {
+                postSwipeEvent(phase: DockGesture.phaseChanged, progress: DockGesture.overshoot * eased, sign: sign)
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(DockGesture.frames + 1) * DockGesture.frameInterval) {
+            postSwipeEvent(phase: DockGesture.phaseEnded, progress: DockGesture.overshoot, sign: sign)
+        }
+    }
+
+    private static func postSwipeEvent(phase: Int64, progress: Double, sign: Double) {
         guard let event = CGEvent(source: nil) else { return }
         event.setIntegerValueField(DockGesture.eventType, value: DockGesture.dockControl)
         event.setIntegerValueField(DockGesture.hidType, value: DockGesture.dockSwipe)
         event.setIntegerValueField(DockGesture.swipeMotion, value: DockGesture.horizontal)
-        event.setDoubleValueField(DockGesture.swipeProgress, value: sign)
-        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * 9999.0)
-        event.setIntegerValueField(DockGesture.gesturePhase, value: DockGesture.phaseBegan)
-        event.post(tap: .cgSessionEventTap)
-        event.setIntegerValueField(DockGesture.gesturePhase, value: DockGesture.phaseEnded)
+        event.setDoubleValueField(DockGesture.swipeProgress, value: sign * progress)
+        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * DockGesture.velocity)
+        event.setIntegerValueField(DockGesture.gesturePhase, value: phase)
         event.post(tap: .cgSessionEventTap)
     }
 

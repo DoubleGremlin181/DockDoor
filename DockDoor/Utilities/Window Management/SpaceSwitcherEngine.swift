@@ -406,7 +406,11 @@ enum SpaceSwitcherEngine {
             on: display,
             keepCursor: Defaults[.spaceSwitcherWarpCursor]
         )
-        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 900_000_000) {
+        // Each animated step takes ~0.4 s; verify once the whole walk had time to land.
+        let currentIndex = display.spaces.firstIndex { $0.id == display.currentSpaceID } ?? 0
+        let targetIndex = display.spaces.firstIndex { $0.id == space.id } ?? currentIndex
+        let walk = UInt64(max(1, abs(targetIndex - currentIndex))) * 400_000_000
+        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: walk + 600_000_000) {
             if let focusTarget {
                 DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; bringToFront fallback wid=\(focusTarget.id)")
                 focusTarget.bringToFront()
