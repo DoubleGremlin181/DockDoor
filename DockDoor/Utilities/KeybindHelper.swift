@@ -987,13 +987,6 @@ class KeybindHelper {
     }
 
     private func determineActionForKeyDown(event: CGEvent) -> (shouldConsume: Bool, actionTask: (() async -> Void)?) {
-        // Any key but the Space Switcher's trigger while its modifier is held
-        // means the chord is something else: drop the preview prewarm.
-        if Defaults[.enableSpaceSwitcher], !spaceSwitcherSessionActive,
-           event.getIntegerValueField(.keyboardEventKeycode) != Int64(Defaults[.spaceSwitcherKeybind].keyCode)
-        {
-            Task { @MainActor [weak self] in self?.spaceSwitchingCoordinator.cancelPrewarm() }
-        }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let flags = event.flags
         let keyBoardShortcutSaved: UserKeyBind = Defaults[.UserKeybind]
@@ -1415,9 +1408,9 @@ class KeybindHelper {
 
         if !oldState, isPressed {
             hasProcessedSpaceModifierRelease = false
-            // Start loading previews once the modifier has been held a beat;
-            // Tab usually follows a deliberate hold.
-            spaceSwitchingCoordinator.armPrewarm()
+            // Start loading previews now (or reuse the last minute's pass);
+            // Tab usually follows within a beat.
+            spaceSwitchingCoordinator.prewarmPreviews()
         }
 
         if oldState, !isPressed, !spaceSwitchingCoordinator.isSessionActive {

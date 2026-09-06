@@ -186,7 +186,7 @@ struct SpaceSwitcherSettingsView: View {
                         .frame(width: 60, alignment: .trailing)
                 }
                 .settingsSearchTarget("spaceSwitcher.previewDelay")
-                Text("Previews start loading the moment the shortcut’s modifier is held; opening waits at most this long for them to finish, so the panel opens on fresh pictures without swapping them in afterwards.")
+                Text("Previews load when the shortcut’s modifier is pressed and are kept for a minute; opening waits at most this long for a load still in progress, so the panel opens on fresh pictures without swapping them in afterwards.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 20)

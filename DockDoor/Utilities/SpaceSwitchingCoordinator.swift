@@ -134,13 +134,13 @@ final class SpaceSwitchingCoordinator {
     }
 
     private var prewarm: PreviewPrewarm?
-    /// Pending start of a prewarm, waiting out the hold threshold.
-    private var prewarmArmTask: Task<Void, Never>?
-    /// The modifier must be held alone this long before a prewarm starts.
-    /// Ordinary chords (Option+arrow, Option+letter) resolve well inside
-    /// this, so they never pay for a model build or a capture; a deliberate
-    /// hold before the trigger key comfortably exceeds it.
-    private static let prewarmHoldThreshold: TimeInterval = 0.15
+    /// A finished prewarm is kept and reused for this long, so a modifier
+    /// that is also used for ordinary chords costs at most one model build
+    /// and one capture pass per minute.
+    private static let prewarmCacheLifetime: TimeInterval = 60
+    /// A cached prewarm older than this still opens the panel instantly, but
+    /// a fresh pass then runs behind it and swaps only tiles that changed.
+    private static let prewarmStaleAge: TimeInterval = 5
     /// The trigger key arrived and the panel is waiting for previews.
     private var activationPending = false
     /// The modifier came up during that wait: a quick tap — commit as soon
@@ -150,27 +150,15 @@ final class SpaceSwitchingCoordinator {
     /// come and gone while the modifier was held.
     private static let prewarmModelLifetime: TimeInterval = 2
 
-    /// The chord's modifier went down with no session open: once it has been
-    /// held alone for the threshold, build the model and start capturing.
+    /// The chord's modifier went down: build the model and start capturing
+    /// thumbnails in the background, most useful first — unless a pass from
+    /// the last minute is already cached. Once started, a pass runs to
+    /// completion; it is never thrown away for a chord that turns out to be
+    /// something else, so the cost stays bounded.
     @MainActor
-    func armPrewarm() {
-        guard state == nil, Defaults[.enableSpaceSwitcher], prewarm == nil, prewarmArmTask == nil else { return }
-        prewarmArmTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.prewarmHoldThreshold * 1_000_000_000))
-            guard let self, !Task.isCancelled else { return }
-            prewarmArmTask = nil
-            prewarmPreviews()
-        }
-    }
-
-    /// Build the model and start capturing thumbnails in the background,
-    /// most useful first.
-    @MainActor
-    func prewarmPreviews() {
-        guard state == nil, Defaults[.enableSpaceSwitcher] else { return }
-        prewarmArmTask?.cancel()
-        prewarmArmTask = nil
-        if let prewarm, Date().timeIntervalSince(prewarm.startedAt) < Self.prewarmModelLifetime { return }
+    func prewarmPreviews(force: Bool = false) {
+        guard Defaults[.enableSpaceSwitcher] else { return }
+        if !force, let prewarm, Date().timeIntervalSince(prewarm.startedAt) < Self.prewarmCacheLifetime { return }
         prewarm?.task?.cancel()
 
         let model = SpaceSwitcherEngine.buildModel()
@@ -202,27 +190,13 @@ final class SpaceSwitchingCoordinator {
         }
     }
 
-    /// The modifier was released, or another key was pressed, before the
-    /// trigger key: nothing to show, stop capturing.
-    @MainActor
-    func cancelPrewarm() {
-        guard state == nil, !activationPending else { return }
-        prewarmArmTask?.cancel()
-        prewarmArmTask = nil
-        if prewarm != nil {
-            DebugLogger.log("SpaceSwitcher", details: "prewarm cancelled")
-        }
-        prewarm?.task?.cancel()
-        prewarm = nil
-    }
-
-    /// The chord's modifier came up with no session open yet.
+    /// The chord's modifier came up with no session open yet. A cached
+    /// prewarm stays for the next press; a pending activation becomes a
+    /// quick tap.
     @MainActor
     func modifierReleasedBeforeSession() {
         if activationPending {
             commitOnActivation = true
-        } else {
-            cancelPrewarm()
         }
     }
 
@@ -248,9 +222,10 @@ final class SpaceSwitchingCoordinator {
             commitOnActivation = false
         }
 
-        // Fresh previews before the panel shows, like the dock: wait for the
-        // prewarm up to the configured delay. Held for a moment first, it is
-        // usually done already; pressed as a quick chord, it just started.
+        // Fresh previews before the panel shows, like the dock: wait for a
+        // prewarm in progress up to the configured delay. Held for a moment
+        // first, or pressed within a minute of the last one, it is usually
+        // done already; pressed as a quick chord, it just started.
         if prewarm == nil {
             prewarmPreviews()
         }
@@ -265,14 +240,14 @@ final class SpaceSwitchingCoordinator {
             return
         }
 
+        let prewarmAge = Date().timeIntervalSince(prewarm.startedAt)
         var model = prewarm.model
-        if Date().timeIntervalSince(prewarm.startedAt) > Self.prewarmModelLifetime {
+        if prewarmAge > Self.prewarmModelLifetime {
             model = SpaceSwitcherEngine.buildModel()
         }
         model = model.replacingImages(prewarm.images)
-        DebugLogger.log("SpaceSwitcher", details: "activation: prewarm \(Int(Date().timeIntervalSince(prewarm.startedAt) * 1000)) ms old, \(prewarm.visited)/\(prewarm.order.count) captured, \(prewarm.images.count) changed")
+        DebugLogger.log("SpaceSwitcher", details: "activation: prewarm \(Int(prewarmAge * 1000)) ms old, \(prewarm.visited)/\(prewarm.order.count) captured, \(prewarm.images.count) changed")
         guard model.allSpaces.count > 1 else {
-            cancelPrewarm()
             onSessionEnd?()
             return
         }
@@ -307,7 +282,11 @@ final class SpaceSwitchingCoordinator {
         let panel = SpaceSwitcherPanelCoordinator()
         self.panel = panel
         panel.show(state: state, on: screen)
-        // Captures still running keep landing in the panel via the prewarm task.
+        // Captures still running keep landing in the panel via the prewarm
+        // task; a cached pass that has gone stale is redone behind the panel.
+        if prewarm.isComplete, prewarmAge > Self.prewarmStaleAge {
+            prewarmPreviews(force: true)
+        }
     }
 
     /// Screen the panel opens on, per the Placement setting; falls back to the
@@ -378,8 +357,6 @@ final class SpaceSwitchingCoordinator {
 
     @MainActor
     private func endSession() {
-        prewarm?.task?.cancel()
-        prewarm = nil
         sessionID = UUID()
         recentMoves = [:]
         panel?.hide()

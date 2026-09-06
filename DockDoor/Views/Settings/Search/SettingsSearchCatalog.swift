@@ -657,7 +657,7 @@ enum SettingsSearchCatalog {
         SettingsSearchItem(
             id: "spaceSwitcher.previewDelay",
             title: String(localized: "Preview delay"),
-            description: String(localized: "Previews start loading the moment the shortcut’s modifier is held; opening waits at most this long for them to finish, so the panel opens on fresh pictures without swapping them in afterwards."),
+            description: String(localized: "Previews load when the shortcut’s modifier is pressed and are kept for a minute; opening waits at most this long for a load still in progress, so the panel opens on fresh pictures without swapping them in afterwards."),
             keywords: ["preview", "delay", "thumbnail", "capture", "fresh", "space", "wait"],
             tab: "SpaceSwitcher",
             section: String(localized: "Behavior"),
