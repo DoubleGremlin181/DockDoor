@@ -1,6 +1,11 @@
 import Cocoa
 
 extension NSScreen {
+    /// The CoreGraphics display this screen is on
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+    }
+
     static func screenFromQuartzPoint(_ point: CGPoint) -> NSScreen {
         let pointInScreenCoordinates = CGPoint(x: point.x, y: NSScreen.screens.first!.frame.maxY - point.y)
 

@@ -36,9 +36,7 @@ extension DisplayIdentity {
         if let uuid = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() {
             uuidString = CFUUIDCreateString(nil, uuid) as String?
         }
-        let screen = NSScreen.screens.first { screen in
-            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
-        }
+        let screen = NSScreen.screens.first { $0.displayID == displayID }
         return Probe(
             displayID: displayID,
             uuid: uuidString,

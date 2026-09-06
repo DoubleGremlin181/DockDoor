@@ -32,11 +32,11 @@ enum DebugLogger {
     }
 
     /// Log an operation with optional details
-    static func log(_ operation: String, details: String? = nil) {
+    static func log(_ operation: String, details: @autoclosure () -> String? = nil) {
         guard Defaults[.debugMode] else { return }
 
         var logLine = "[\(formattedTimestamp())] \(operation)"
-        if let details {
+        if let details = details() {
             logLine += " - \(details)"
         }
         writeToFile(logLine)

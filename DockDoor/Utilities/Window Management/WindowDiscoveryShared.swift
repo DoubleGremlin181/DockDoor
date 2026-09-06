@@ -507,57 +507,6 @@ func currentActiveSpaceIDs() -> Set<Int> {
 }
 
 enum WindowSpaces {
-    private struct ManagedDisplay {
-        let identifier: String
-        let currentSpaceID: CGSSpaceID?
-        let spaceIDs: Set<CGSSpaceID>
-    }
-
-    private static func spaceID(from dictionary: [String: AnyObject]?) -> CGSSpaceID? {
-        if let managedSpaceID = dictionary?["ManagedSpaceID"] as? NSNumber {
-            return managedSpaceID.uint64Value
-        }
-        if let id64 = dictionary?["id64"] as? NSNumber {
-            return id64.uint64Value
-        }
-        return nil
-    }
-
-    private static func managedDisplays() -> [ManagedDisplay] {
-        guard let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: AnyObject]] else {
-            return []
-        }
-
-        return displays.compactMap { display in
-            guard let identifier = display["Display Identifier"] as? String else { return nil }
-            let currentSpace = display["Current Space"] as? [String: AnyObject]
-            let spaces = display["Spaces"] as? [[String: AnyObject]] ?? []
-
-            return ManagedDisplay(
-                identifier: identifier,
-                currentSpaceID: spaceID(from: currentSpace),
-                spaceIDs: Set(spaces.compactMap { spaceID(from: $0) })
-            )
-        }
-    }
-
-    private static func displayIdentifiers(for screen: NSScreen) -> Set<String> {
-        guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
-            return []
-        }
-
-        let displayID = CGDirectDisplayID(screenNumber.uint32Value)
-        var identifiers: Set<String> = [String(displayID)]
-
-        if let uuid = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue(),
-           let uuidString = CFUUIDCreateString(nil, uuid) as String?
-        {
-            identifiers.insert(uuidString)
-        }
-
-        return identifiers
-    }
-
     private static func screenContainingMouse(_ mouseLocation: CGPoint) -> NSScreen? {
         NSScreen.screens.first { screen in
             NSPointInRect(mouseLocation, screen.frame)
@@ -565,21 +514,14 @@ enum WindowSpaces {
     }
 
     static func currentManagedSpaceID(mouseLocation: CGPoint = NSEvent.mouseLocation) -> CGSSpaceID? {
-        let displays = managedDisplays()
-        guard !displays.isEmpty else { return nil }
-
-        if let mouseScreen = screenContainingMouse(mouseLocation) {
-            let screenIdentifiers = displayIdentifiers(for: mouseScreen)
-                .map { $0.lowercased() }
-
-            if let display = displays.first(where: { display in
-                screenIdentifiers.contains(display.identifier.lowercased())
-            }) {
-                return display.currentSpaceID
-            }
+        let table = SpaceTopology.shared.spaces(maxAge: 0.5)
+        guard !table.displays.isEmpty else { return nil }
+        if let mouseScreen = screenContainingMouse(mouseLocation),
+           let display = table.displays.first(where: { $0.screen == mouseScreen })
+        {
+            return display.currentSpaceID
         }
-
-        return displays.first?.currentSpaceID
+        return table.displays.first?.currentSpaceID
     }
 
     @discardableResult
@@ -594,14 +536,15 @@ enum WindowSpaces {
     @discardableResult
     static func move(windowIDs: [CGWindowID], toManagedSpace targetSpaceID: CGSSpaceID) -> Bool {
         guard !windowIDs.isEmpty else { return true }
-        let displays = managedDisplays()
-        guard displays.contains(where: { display in
-            display.currentSpaceID == targetSpaceID || display.spaceIDs.contains(targetSpaceID)
-        }) else {
+        guard SpaceTopology.shared.spaces(maxAge: 1).knownSpaceIDs.contains(targetSpaceID) else {
             DebugLogger.log("WindowSpaces.move", details: "Target Space \(targetSpaceID) not found")
             return false
         }
-        return SLSMoveWindowsToManagedSpace(windowIDs, targetSpaceID)
+        let moved = SLSMoveWindowsToManagedSpace(windowIDs, targetSpaceID)
+        if moved {
+            SpaceTopology.shared.invalidateMembership()
+        }
+        return moved
     }
 
     /// True while Mission Control (or App Exposé) is showing: the Dock then owns
@@ -612,10 +555,9 @@ enum WindowSpaces {
         }
         for window in list where (window[kCGWindowOwnerName as String] as? String) == "Dock" {
             guard (window[kCGWindowLayer as String] as? Int) == 18,
-                  let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
-                  let width = bounds["Width"], let height = bounds["Height"]
+                  let bounds = CGRect(cgWindowBounds: window[kCGWindowBounds as String] as AnyObject?)
             else { continue }
-            if NSScreen.screens.contains(where: { abs($0.frame.width - width) < 2 && abs($0.frame.height - height) < 2 }) {
+            if NSScreen.screens.contains(where: { abs($0.frame.width - bounds.width) < 2 && abs($0.frame.height - bounds.height) < 2 }) {
                 return true
             }
         }
@@ -625,64 +567,15 @@ enum WindowSpaces {
     /// Full ordered snapshot of every display's spaces, for the Space Switcher.
     /// Desktop numbers always follow Mission Control (main display first, then
     /// left to right); `order` only affects how the display rows are stacked.
-    static func displaySpacesSnapshot(order: SpaceSwitcherDisplayOrder = .mainDisplayFirst) -> [DisplaySpaces] {
-        guard let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: AnyObject]] else {
-            return []
-        }
+    /// `maxAge` 0 reads the window server; anything larger may serve the
+    /// cached table when no Space or display event happened since.
+    static func displaySpacesSnapshot(order: SpaceSwitcherDisplayOrder = .mainDisplayFirst, maxAge: TimeInterval = 0) -> [DisplaySpaces] {
+        orderedRows(from: SpaceTopology.shared.spaces(maxAge: maxAge), order: order)
+    }
 
-        let parsed: [(identifier: String, screen: NSScreen?, currentSpaceID: CGSSpaceID?, spaceDicts: [[String: AnyObject]])] = displays.compactMap { display in
-            guard let identifier = display["Display Identifier"] as? String else { return nil }
-            return (
-                identifier: identifier,
-                screen: screen(forDisplayIdentifier: identifier),
-                currentSpaceID: spaceID(from: display["Current Space"] as? [String: AnyObject]),
-                spaceDicts: display["Spaces"] as? [[String: AnyObject]] ?? []
-            )
-        }
-
-        // Main screen's display first, remaining rows left-to-right; unresolved displays last.
-        let ordered = parsed.sorted { a, b in
-            switch (a.screen, b.screen) {
-            case let (sa?, sb?):
-                let mainA = sa == NSScreen.screens.first
-                let mainB = sb == NSScreen.screens.first
-                if mainA != mainB {
-                    return mainA
-                }
-                return sa.frame.minX < sb.frame.minX
-            case (nil, nil): return a.identifier < b.identifier
-            case (nil, _): return false
-            case (_, nil): return true
-            }
-        }
-
-        // Desktop numbering is global and continuous across displays, matching
-        // Mission Control (fullscreen-app spaces are unnumbered).
-        var desktopCounter = 0
-        let numbered = ordered.map { display in
-            let spaces: [SpaceInfo] = display.spaceDicts.compactMap { dict in
-                guard let id = spaceID(from: dict) else { return nil }
-                let type = (dict["type"] as? NSNumber)?.intValue ?? 0
-                if type != 4 {
-                    desktopCounter += 1
-                }
-                return SpaceInfo(
-                    id: id,
-                    uuid: dict["uuid"] as? String ?? "",
-                    type: type,
-                    displayIdentifier: display.identifier,
-                    desktopNumber: type == 4 ? 0 : desktopCounter,
-                    isCurrent: id == display.currentSpaceID
-                )
-            }
-
-            return DisplaySpaces(
-                identifier: display.identifier,
-                screen: display.screen,
-                currentSpaceID: display.currentSpaceID,
-                spaces: spaces
-            )
-        }
+    /// The row order setting applied to a parsed space table.
+    static func orderedRows(from table: SpaceTopology.SpaceTable, order: SpaceSwitcherDisplayOrder) -> [DisplaySpaces] {
+        let numbered = table.displays
         var frames: [String: CGRect] = [:]
         for display in numbered {
             if let screen = display.screen {
@@ -741,12 +634,7 @@ enum WindowSpaces {
     }
 
     static func screen(forDisplayIdentifier identifier: String) -> NSScreen? {
-        let lowered = identifier.lowercased()
-        return NSScreen.screens.first { screen in
-            displayIdentifiers(for: screen).contains { $0.lowercased() == lowered }
-        }
-            // "Main" appears when displays don't have separate Spaces
-            ?? (lowered == "main" ? NSScreen.screens.first : nil)
+        SpaceTopology.shared.displays().screen(forCGSIdentifier: identifier)
     }
 
     // MARK: - Dock-swipe gesture switching
@@ -787,23 +675,10 @@ enum WindowSpaces {
               currentIndex != targetIndex
         else { return false }
 
-        guard !CGSManagedDisplayIsAnimating(CGSMainConnectionID(), display.identifier) else {
-            DebugLogger.log("WindowSpaces.switchViaDockGesture", details: "display \(display.identifier) is animating")
-            return false
-        }
-
         // Warp the cursor to the target display when it's elsewhere
         var restorePoint: CGPoint?
-        if let screen = display.screen,
-           let primaryMaxY = NSScreen.screens.first?.frame.maxY,
-           let cursor = CGEvent(source: nil)?.location
-        {
-            let screenCG = CGRect(
-                x: screen.frame.origin.x,
-                y: primaryMaxY - screen.frame.maxY,
-                width: screen.frame.width,
-                height: screen.frame.height
-            )
+        if let screen = display.screen, let cursor = CGEvent(source: nil)?.location {
+            let screenCG = screen.cgFrame
             if !screenCG.contains(cursor) {
                 restorePoint = cursor
                 CGWarpMouseCursorPosition(CGPoint(x: screenCG.midX, y: screenCG.midY))
@@ -865,8 +740,7 @@ enum WindowSpaces {
 
     @discardableResult
     static func setCurrentSpace(_ targetSpaceID: CGSSpaceID, onDisplay displayIdentifier: String) -> Bool {
-        let displays = displaySpacesSnapshot()
-        guard let display = displays.first(where: { $0.identifier == displayIdentifier }),
+        guard let display = SpaceTopology.shared.spaces().display(for: displayIdentifier),
               display.spaces.contains(where: { $0.id == targetSpaceID })
         else {
             DebugLogger.log("WindowSpaces.setCurrentSpace", details: "Space \(targetSpaceID) not found on display \(displayIdentifier)")

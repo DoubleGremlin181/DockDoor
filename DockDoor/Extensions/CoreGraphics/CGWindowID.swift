@@ -20,3 +20,11 @@ extension CGWindowID {
         return spaces.map(\.uint64Value)
     }
 }
+
+extension CGRect {
+    /// The kCGWindowBounds entry of a CGWindowListCopyWindowInfo dictionary
+    init?(cgWindowBounds value: AnyObject?) {
+        guard let dict = value as? NSDictionary, let rect = CGRect(dictionaryRepresentation: dict) else { return nil }
+        self = rect
+    }
+}

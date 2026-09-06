@@ -64,38 +64,76 @@ enum SpaceSwitcherEngine {
         }
     }
 
-    /// Cheap learning pass run on every native space change: records fresh CGS
-    /// attributions for onscreen windows so previews stay complete from normal
-    /// use of the machine, not just from opening the switcher. Also prunes
-    /// entries that reference deleted spaces.
-    @MainActor
-    static func learnVisibleWindows() {
-        let displays = WindowSpaces.displaySpacesSnapshot()
-        DisplayLayoutMemory.shared.noteSpaces(displays)
-        let knownSpaceIDs = Set(displays.flatMap { $0.spaces.map(\.id) })
-        guard !knownSpaceIDs.isEmpty,
-              let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: AnyObject]]
-        else { return }
+    /// Space-table generation the last `buildModel` ran against: a learning
+    /// pass for the same generation has nothing new to see.
+    @MainActor private static var lastModelSpaceGeneration: UInt64?
+    @MainActor private static var learningSubscription: UUID?
+    @MainActor private static var relearnTask: Task<Void, Never>?
 
-        var frames: [CGWindowID: CGRect] = [:]
-        for entry in list {
-            guard (entry[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 else { continue }
-            let wid = CGWindowID((entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value ?? 0)
-            let fresh = Set(wid.cgsSpaces().filter { knownSpaceIDs.contains($0) })
-            if !fresh.isEmpty, learnedSpaces[wid] != fresh {
-                learnedSpaces[wid] = fresh
-                learnedDirty = true
-            }
-            if fresh.count == 1, let bounds = entry[kCGWindowBounds as String] as? [String: AnyObject] {
-                frames[wid] = CGRect(
-                    x: (bounds["X"] as? NSNumber)?.doubleValue ?? 0,
-                    y: (bounds["Y"] as? NSNumber)?.doubleValue ?? 0,
-                    width: (bounds["Width"] as? NSNumber)?.doubleValue ?? 0,
-                    height: (bounds["Height"] as? NSNumber)?.doubleValue ?? 0
-                )
+    /// Learns from normal Space usage so previews and display layout memory
+    /// are complete without the switcher ever being opened. Idempotent and
+    /// shared: either the Space Switcher or display layout memory alone
+    /// keeps the map warm.
+    @MainActor
+    static func startLearning() {
+        guard learningSubscription == nil else { return }
+        learningSubscription = SpaceTopology.shared.subscribe { event in
+            switch event {
+            case .activeSpaceChanged:
+                // Debounced until the switch settles
+                scheduleLearning(after: 0.8)
+            case .displaysChanged, .screenParametersChanged:
+                // macOS migrates Spaces to new IDs; learn (and prune dead
+                // IDs) once the new topology is stable.
+                scheduleLearning(after: 3)
+            case .displaysWillChange, .willSleep, .didWake:
+                break
             }
         }
-        DisplayLayoutMemory.shared.noteFrames(frames)
+        scheduleLearning(after: 2)
+    }
+
+    @MainActor
+    private static func scheduleLearning(after seconds: TimeInterval) {
+        relearnTask?.cancel()
+        relearnTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            learnVisibleWindows()
+        }
+    }
+
+    /// Learning pass run after every native space change: records the window
+    /// server's membership for every Space (it answers for non-current
+    /// Spaces too, so windows opened on other desktops are covered), notes
+    /// the onscreen windows' frames, and prunes entries that reference
+    /// deleted Spaces. Skipped when a model build already learned this
+    /// generation.
+    @MainActor
+    static func learnVisibleWindows() {
+        let table = SpaceTopology.shared.spaces()
+        let knownSpaceIDs = table.knownSpaceIDs
+        guard !knownSpaceIDs.isEmpty else { return }
+
+        var frames: [CGWindowID: CGRect] = [:]
+        if lastModelSpaceGeneration != table.generation {
+            let membership = SpaceTopology.shared.membership(maxAge: 1)
+            for (wid, spaces) in membership.spacesByWindow {
+                let fresh = spaces.intersection(knownSpaceIDs)
+                if !fresh.isEmpty, learnedSpaces[wid] != fresh {
+                    learnedSpaces[wid] = fresh
+                    learnedDirty = true
+                }
+            }
+            if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: AnyObject]] {
+                for entry in list where (entry[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 {
+                    let wid = CGWindowID((entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value ?? 0)
+                    if learnedSpaces[wid]?.count == 1, let frame = CGRect(cgWindowBounds: entry[kCGWindowBounds as String]) {
+                        frames[wid] = frame
+                    }
+                }
+            }
+        }
 
         let pruned = learnedSpaces.filter { !$0.value.intersection(knownSpaceIDs).isEmpty }
         if pruned.count != learnedSpaces.count {
@@ -103,6 +141,7 @@ enum SpaceSwitcherEngine {
             learnedDirty = true
         }
         persistLearnedIfNeeded()
+        DisplayLayoutMemory.shared.note(spaces: table.displays, frames: frames)
     }
 
     /// Copy of the learned map for display layout memory.
@@ -132,15 +171,19 @@ enum SpaceSwitcherEngine {
     /// target space: CGS reports an empty space list for a while after
     /// SLSMoveWindowsToManagedSpace, which would otherwise make the moved
     /// window vanish from every card (unseeable and un-undoable).
+    /// `includeAll` skips the switcher's visibility filters (minimized and
+    /// hidden windows): display layout memory needs every window on every
+    /// desktop.
     @MainActor
-    static func buildModel(attributionOverrides: [CGWindowID: CGSSpaceID] = [:]) -> Model {
-        let displays = WindowSpaces.displaySpacesSnapshot(order: Defaults[.spaceSwitcherDisplayOrder])
-        DisplayLayoutMemory.shared.noteSpaces(displays)
-        let knownSpaceIDs = Set(displays.flatMap { $0.spaces.map(\.id) })
-        let currentSpaceIDs = Set(displays.compactMap(\.currentSpaceID))
+    static func buildModel(attributionOverrides: [CGWindowID: CGSSpaceID] = [:], includeAll: Bool = false) -> Model {
+        let table = SpaceTopology.shared.spaces()
+        let displays = WindowSpaces.orderedRows(from: table, order: Defaults[.spaceSwitcherDisplayOrder])
+        let knownSpaceIDs = table.knownSpaceIDs
+        let currentSpaceIDs = table.currentSpaceIDs
 
         var cachedByID: [CGWindowID: WindowInfo] = [:]
-        for info in WindowUtil.getAllWindowsOfAllApps() where !info.isWindowlessApp {
+        let cached = includeAll ? WindowUtil.cachedWindowsUnfiltered() : WindowUtil.getAllWindowsOfAllApps()
+        for info in cached where !info.isWindowlessApp {
             cachedByID[info.id] = info
         }
 
@@ -149,27 +192,36 @@ enum SpaceSwitcherEngine {
             return Model(displays: displays, windowsBySpace: [:])
         }
 
-        let spacesByWindow = perSpaceWindowMap(for: displays)
+        let spacesByWindow = SpaceTopology.shared.membership(maxAge: 1).spacesByWindow
         var frames: [CGWindowID: CGRect] = [:]
+        var appsByPID: [pid_t: NSRunningApplication?] = [:]
 
         for entry in list {
-            guard let candidate = windowCandidate(from: entry, cachedByID: cachedByID) else { continue }
+            let pid = pid_t((entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0)
+            if appsByPID[pid] == nil {
+                appsByPID[pid] = .some(NSRunningApplication(processIdentifier: pid))
+            }
+            guard let candidate = windowCandidate(from: entry, app: appsByPID[pid] ?? nil, cachedByID: cachedByID, includeAll: includeAll) else { continue }
 
             var fresh = Array(spacesByWindow[candidate.wid] ?? [])
             if fresh.isEmpty {
                 fresh = candidate.wid.cgsSpaces().filter { knownSpaceIDs.contains($0) }
             }
+            let center = CGPoint(x: candidate.frame.midX, y: candidate.frame.midY)
             guard let attribution = resolveAttribution(
                 fresh: fresh,
                 moveOverride: attributionOverrides[candidate.wid],
-                onscreenCurrentSpaceID: candidate.isOnscreen ? currentSpaceID(containing: candidate.frame, in: displays) : nil,
+                onscreenCurrentSpaceID: candidate.isOnscreen ? table.currentSpaceID(containing: center) : nil,
                 learned: learnedSpaces[candidate.wid],
                 cachedSpaceID: candidate.info?.spaceID.map { CGSSpaceID($0) },
                 knownSpaceIDs: knownSpaceIDs
             ) else { continue }
 
+            // A minimized window is offscreen on a visible Space by definition;
+            // the ghost filter would reject and unlearn it.
+            let isMinimized = includeAll && candidate.info?.isMinimized == true
             let hasTitle = (candidate.cgTitle?.isEmpty == false) || (candidate.info?.windowName?.isEmpty == false)
-            switch ghostFilterVerdict(
+            switch isMinimized ? .accept : ghostFilterVerdict(
                 spaces: attribution.spaces,
                 isOnscreen: candidate.isOnscreen,
                 currentSpaceIDs: currentSpaceIDs,
@@ -211,23 +263,9 @@ enum SpaceSwitcherEngine {
         }
 
         persistLearnedIfNeeded()
-        DisplayLayoutMemory.shared.noteFrames(frames)
+        lastModelSpaceGeneration = table.generation
+        DisplayLayoutMemory.shared.note(spaces: table.displays, frames: frames)
         return Model(displays: displays, windowsBySpace: windowsBySpace)
-    }
-
-    /// Authoritative wid→spaces map straight from the window server: unlike
-    /// CGSCopySpacesForWindows, the per-space window-list query answers for
-    /// NON-current spaces too.
-    private static func perSpaceWindowMap(for displays: [DisplaySpaces]) -> [CGWindowID: Set<CGSSpaceID>] {
-        var spacesByWindow: [CGWindowID: Set<CGSSpaceID>] = [:]
-        for display in displays {
-            for space in display.spaces {
-                for wid in CGSCopyWindowsForSpace(CGSMainConnectionID(), space.id) {
-                    spacesByWindow[wid, default: []].insert(space.id)
-                }
-            }
-        }
-        return spacesByWindow
     }
 
     private struct Candidate {
@@ -244,35 +282,29 @@ enum SpaceSwitcherEngine {
     /// Basic eligibility filters on a raw CGWindowList entry. DockDoor's own
     /// regular windows (Settings) are included on purpose; its panels live at
     /// non-zero window levels and fail the layer filter.
-    private static func windowCandidate(from entry: [String: AnyObject], cachedByID: [CGWindowID: WindowInfo]) -> Candidate? {
+    private static func windowCandidate(from entry: [String: AnyObject], app: NSRunningApplication?, cachedByID: [CGWindowID: WindowInfo], includeAll: Bool) -> Candidate? {
         guard (entry[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 else { return nil }
         let pid = pid_t((entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value ?? 0)
 
         let alpha = (entry[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1.0
         guard alpha > 0.01 else { return nil }
 
-        guard let boundsDict = entry[kCGWindowBounds as String] as? [String: AnyObject] else { return nil }
-        let frame = CGRect(
-            x: (boundsDict["X"] as? NSNumber)?.doubleValue ?? 0,
-            y: (boundsDict["Y"] as? NSNumber)?.doubleValue ?? 0,
-            width: (boundsDict["Width"] as? NSNumber)?.doubleValue ?? 0,
-            height: (boundsDict["Height"] as? NSNumber)?.doubleValue ?? 0
-        )
-        guard frame.width >= minWindowSize.width, frame.height >= minWindowSize.height else { return nil }
+        guard let frame = CGRect(cgWindowBounds: entry[kCGWindowBounds as String]),
+              frame.width >= minWindowSize.width, frame.height >= minWindowSize.height
+        else { return nil }
 
         let wid = CGWindowID((entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value ?? 0)
         let info = cachedByID[wid]
-        if let info, info.isMinimized || info.isHidden {
+        if !includeAll, let info, info.isMinimized || info.isHidden {
             return nil
         }
 
-        let app = NSRunningApplication(processIdentifier: pid)
         // Filter system/overlay noise (Spotlight, loginwindow, menu-bar app
         // popovers): only regular apps, unless DockDoor's own discovery
         // already accepted the window.
         guard app?.activationPolicy == .regular || info != nil else { return nil }
         // Match the Window Switcher's hidden-app behavior
-        if app?.isHidden == true, !Defaults[.includeHiddenWindowsInSwitcher] {
+        if !includeAll, app?.isHidden == true, !Defaults[.includeHiddenWindowsInSwitcher] {
             return nil
         }
 
@@ -286,13 +318,6 @@ enum SpaceSwitcherEngine {
             info: info,
             ownerName: entry[kCGWindowOwnerName as String] as? String
         )
-    }
-
-    private static func currentSpaceID(containing frame: CGRect, in displays: [DisplaySpaces]) -> CGSSpaceID? {
-        displays.first(where: { display in
-            guard let screen = display.screen else { return false }
-            return screen.cgFrame.contains(CGPoint(x: frame.midX, y: frame.midY))
-        })?.currentSpaceID
     }
 
     struct Attribution: Equatable {
@@ -377,12 +402,14 @@ enum SpaceSwitcherEngine {
         (CFPreferencesCopyAppValue("workspaces-auto-swoosh" as CFString, "com.apple.dock" as CFString) as? Bool) ?? true
     }
 
+    /// Gesture speed for the fallbacks when the preset has no velocity
+    private static let fallbackVelocity = 40.0
+
     @MainActor
     static func switchTo(space: SpaceInfo, in model: Model) {
         // Resolve current state freshly at commit time: the user may have
         // switched spaces natively (trackpad swipe) while the panel was open.
-        let freshDisplays = WindowSpaces.displaySpacesSnapshot()
-        guard let display = freshDisplays.first(where: { $0.identifier == space.displayIdentifier }) else { return }
+        guard let display = SpaceTopology.shared.spaces().display(for: space.displayIdentifier) else { return }
         guard display.currentSpaceID != space.id else {
             DebugLogger.log("SpaceSwitcherEngine", details: "switchTo: space \(space.id) already current")
             return
@@ -395,30 +422,27 @@ enum SpaceSwitcherEngine {
         let velocity = Defaults[.spaceSwitcherAnimationSpeed].gestureVelocity
 
         if let velocity {
-            // Dock swipe at the chosen speed (InstantSpaceSwitcher presets);
-            // falls back to focusing a window on the Space, then to CGS.
-            gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: velocity)
+            // Dock swipe at the chosen speed; falls back to focusing a window
+            // on the Space, then to CGS.
+            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: velocity)
         } else if let focusTarget, switchesSpaceOnActivation {
             // macOS default: focus the Space's frontmost window and let the
             // system slide there in one motion, however far away it is.
             focusTarget.bringToFront()
             verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 500_000_000) {
                 DebugLogger.log("SpaceSwitcherEngine", details: "focus did not switch; gesture fallback to \(space.id)")
-                gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: nil, velocity: SpaceSwitcherAnimationSpeed.normal.gestureVelocity ?? 40)
+                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: originSpaceID, focusTarget: nil, velocity: fallbackVelocity)
             }
         } else {
-            gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: SpaceSwitcherAnimationSpeed.normal.gestureVelocity ?? 40)
+            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: fallbackVelocity)
         }
-
-        Task.detached(priority: .low) {
-            await WindowUtil.updateAllWindowsInCurrentSpace()
-        }
+        // The Space change this causes is observed like any other; the window
+        // cache refresh that follows it is not repeated here.
     }
 
     @MainActor
-    private static func gestureThenVerify(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, velocity: Double) {
-        let freshDisplays = WindowSpaces.displaySpacesSnapshot()
-        guard let display = freshDisplays.first(where: { $0.identifier == space.displayIdentifier }) else { return }
+    private static func gestureThenVerify(space: SpaceInfo, on display: DisplaySpaces?, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, velocity: Double) {
+        guard let display = display ?? SpaceTopology.shared.spaces().display(for: space.displayIdentifier) else { return }
         WindowSpaces.switchViaDockGesture(
             to: space,
             on: display,
@@ -444,8 +468,7 @@ enum SpaceSwitcherEngine {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: nanoseconds)
             guard generation == commitGeneration else { return }
-            let displays = WindowSpaces.displaySpacesSnapshot()
-            guard let current = displays.first(where: { $0.identifier == space.displayIdentifier }),
+            guard let current = SpaceTopology.shared.spaces().display(for: space.displayIdentifier),
                   current.currentSpaceID != space.id,
                   current.currentSpaceID == originSpaceID
             else { return }

@@ -113,6 +113,7 @@
 		BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */; };
 		3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */; };
 		E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */; };
+		6CB354F68D4C436AA314CD28 /* SpaceTopology.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C7C06D7ECD24C51963610C5 /* SpaceTopology.swift */; };
 		78F99BF445634FFFA2D5F887 /* DisplayLayoutMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F69CBD89DFC43AA805A209E /* DisplayLayoutMemory.swift */; };
 		690E007A395241668CB6614C /* DisplayLayoutReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8D7DAA1B284FF4AFEF4414 /* DisplayLayoutReconciler.swift */; };
 		7E99DA5A065A4E42A4652E0B /* DisplayReconfigurationObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C70D9E4B91E45B389950651 /* DisplayReconfigurationObserver.swift */; };
@@ -372,6 +373,7 @@
 		BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDiscoveryShared.swift; sourceTree = "<group>"; };
 		E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceInfo.swift; sourceTree = "<group>"; };
 		686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngine.swift; sourceTree = "<group>"; };
+		4C7C06D7ECD24C51963610C5 /* SpaceTopology.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceTopology.swift; sourceTree = "<group>"; };
 		4F69CBD89DFC43AA805A209E /* DisplayLayoutMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutMemory.swift; sourceTree = "<group>"; };
 		9A8D7DAA1B284FF4AFEF4414 /* DisplayLayoutReconciler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutReconciler.swift; sourceTree = "<group>"; };
 		9C70D9E4B91E45B389950651 /* DisplayReconfigurationObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayReconfigurationObserver.swift; sourceTree = "<group>"; };
@@ -986,6 +988,7 @@
 				BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */,
 				E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */,
 				686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */,
+				4C7C06D7ECD24C51963610C5 /* SpaceTopology.swift */,
 				4F69CBD89DFC43AA805A209E /* DisplayLayoutMemory.swift */,
 				9A8D7DAA1B284FF4AFEF4414 /* DisplayLayoutReconciler.swift */,
 				9C70D9E4B91E45B389950651 /* DisplayReconfigurationObserver.swift */,
@@ -1307,6 +1310,7 @@
 				BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */,
 				3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */,
 				E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */,
+				6CB354F68D4C436AA314CD28 /* SpaceTopology.swift in Sources */,
 				78F99BF445634FFFA2D5F887 /* DisplayLayoutMemory.swift in Sources */,
 				690E007A395241668CB6614C /* DisplayLayoutReconciler.swift in Sources */,
 				7E99DA5A065A4E42A4652E0B /* DisplayReconfigurationObserver.swift in Sources */,
