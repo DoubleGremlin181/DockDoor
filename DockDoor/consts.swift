@@ -186,6 +186,8 @@ extension Defaults.Keys {
     static let spaceSwitcherDisplayOrder = Key<SpaceSwitcherDisplayOrder>("spaceSwitcherDisplayOrder", default: .mainDisplayFirst)
     static let spaceSwitcherShowDisplayNames = Key<Bool>("spaceSwitcherShowDisplayNames", default: true)
     static let spaceSwitcherAnimationSpeed = Key<SpaceSwitcherAnimationSpeed>("spaceSwitcherAnimationSpeed", default: .faster)
+    /// Longest wait for fresh previews before the panel shows (seconds)
+    static let spaceSwitcherPreviewDelay = Key<Double>("spaceSwitcherPreviewDelay", default: 0.1)
 
     // Display layout memory (per-display desktop/window assignments across disconnects)
     static let spaceSwitcherRememberDisplayLayouts = Key<Bool>("spaceSwitcherRememberDisplayLayouts", default: false)

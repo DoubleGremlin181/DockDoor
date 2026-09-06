@@ -5,7 +5,6 @@ import Defaults
 final class SpaceSwitchingCoordinator {
     private var panel: SpaceSwitcherPanelCoordinator?
     private var state: SpaceSwitcherState?
-    private var refreshTask: Task<Void, Never>?
     private var sessionID = UUID()
     /// Windows this session moved, pinned to their target space until CGS
     /// starts reporting their assignment again (it returns [] right after a
@@ -115,8 +114,101 @@ final class SpaceSwitchingCoordinator {
         return panel.frame
     }
 
+    /// Thumbnails being captured ahead of a session — started when the
+    /// chord's modifier goes down, so by the time the trigger key arrives
+    /// most pictures are already fresh. Keeps feeding the open panel.
     @MainActor
-    func handleActivation(isShiftPressed: Bool) {
+    private final class PreviewPrewarm {
+        let model: SpaceSwitcherEngine.Model
+        let order: [SpaceSwitcherEngine.SpaceWindow]
+        let startedAt = Date()
+        var images: [CGWindowID: CGImage] = [:]
+        var visited = 0
+        var isComplete = false
+        var task: Task<Void, Never>?
+
+        init(model: SpaceSwitcherEngine.Model, order: [SpaceSwitcherEngine.SpaceWindow]) {
+            self.model = model
+            self.order = order
+        }
+    }
+
+    private var prewarm: PreviewPrewarm?
+    /// The trigger key arrived and the panel is waiting for previews.
+    private var activationPending = false
+    /// The modifier came up during that wait: a quick tap — commit as soon
+    /// as the session exists instead of showing the panel.
+    private var commitOnActivation = false
+    /// A prewarm older than this is rebuilt at activation: windows may have
+    /// come and gone while the modifier was held.
+    private static let prewarmModelLifetime: TimeInterval = 2
+
+    /// The chord's modifier is down with no session open: build the model and
+    /// start capturing thumbnails in the background, most useful first.
+    @MainActor
+    func prewarmPreviews() {
+        guard state == nil, Defaults[.enableSpaceSwitcher] else { return }
+        if let prewarm, Date().timeIntervalSince(prewarm.startedAt) < Self.prewarmModelLifetime { return }
+        prewarm?.task?.cancel()
+
+        let model = SpaceSwitcherEngine.buildModel()
+        let order = Self.thumbnailCaptureOrder(for: model)
+        let prewarm = PreviewPrewarm(model: model, order: order)
+        self.prewarm = prewarm
+        DebugLogger.log("SpaceSwitcher", details: "prewarm started for \(order.count) windows")
+        guard WindowUtil.shouldCaptureWindowImages(), !order.isEmpty else {
+            prewarm.isComplete = true
+            return
+        }
+        let cap = Self.downsampleCap(cardWidth: Defaults[.spaceSwitcherCardWidth], on: NSScreen.screens.max { $0.backingScaleFactor < $1.backingScaleFactor } ?? NSScreen.main ?? NSScreen.screens[0])
+        prewarm.task = Task.detached(priority: .userInitiated) { [weak self, weak prewarm] in
+            for window in order {
+                guard !Task.isCancelled else { return }
+                let fresh = Self.captureThumbnail(window, cap: cap)
+                await MainActor.run { [weak self, weak prewarm] in
+                    guard let self, let prewarm, self.prewarm === prewarm else { return }
+                    prewarm.visited += 1
+                    if let fresh, window.image.map({ Self.thumbnailsDiffer($0, fresh) }) ?? true {
+                        prewarm.images[window.id] = fresh
+                        if let state {
+                            state.model = state.model.replacingImages([window.id: fresh])
+                        }
+                    }
+                }
+            }
+            await MainActor.run { [weak prewarm] in prewarm?.isComplete = true }
+        }
+    }
+
+    /// The modifier was released, or another key was pressed, before the
+    /// trigger key: nothing to show, stop capturing.
+    @MainActor
+    func cancelPrewarm() {
+        guard state == nil, !activationPending else { return }
+        if prewarm != nil {
+            DebugLogger.log("SpaceSwitcher", details: "prewarm cancelled")
+        }
+        prewarm?.task?.cancel()
+        prewarm = nil
+    }
+
+    /// The chord's modifier came up with no session open yet.
+    @MainActor
+    func modifierReleasedBeforeSession() {
+        if activationPending {
+            commitOnActivation = true
+        } else {
+            cancelPrewarm()
+        }
+    }
+
+    @MainActor
+    func handleActivation(isShiftPressed: Bool) async {
+        // A second trigger press while the first is still waiting for
+        // previews: let it finish, then cycle.
+        while activationPending {
+            try? await Task.sleep(nanoseconds: 4_000_000)
+        }
         if let state {
             if isShiftPressed {
                 state.cycleBackward()
@@ -126,22 +218,40 @@ final class SpaceSwitchingCoordinator {
             return
         }
 
-        var model = SpaceSwitcherEngine.buildModel()
-        guard model.allSpaces.count > 1 else {
+        activationPending = true
+        defer {
+            activationPending = false
+            commitOnActivation = false
+        }
+
+        // Fresh previews before the panel shows, like the dock: wait for the
+        // prewarm up to the configured delay. Held for a moment first, it is
+        // usually done already; pressed as a quick chord, it just started.
+        if prewarm == nil {
+            prewarmPreviews()
+        }
+        if let prewarm, !prewarm.isComplete, !commitOnActivation {
+            let deadline = Date().addingTimeInterval(Defaults[.spaceSwitcherPreviewDelay])
+            while !prewarm.isComplete, !commitOnActivation, Date() < deadline {
+                try? await Task.sleep(nanoseconds: 4_000_000)
+            }
+        }
+        guard let prewarm else {
             onSessionEnd?()
             return
         }
 
-        // Like the dock preview, capture before showing so the panel does not
-        // open on stale pictures and swap them a moment later — but within a
-        // time budget so the key press still feels instant. Current-space
-        // windows come first; whatever is left refreshes in the background.
-        let screen = Self.targetScreen()
-        let captureOrder = Self.thumbnailCaptureOrder(for: model)
-        let captureStart = Date()
-        let preCaptured = Self.captureThumbnails(captureOrder, on: screen, budget: Self.preShowCaptureBudget)
-        DebugLogger.log("SpaceSwitcher", details: "pre-show capture: \(preCaptured.count) changed of \(captureOrder.count) windows in \(Int(Date().timeIntervalSince(captureStart) * 1000)) ms")
-        model = model.replacingImages(preCaptured)
+        var model = prewarm.model
+        if Date().timeIntervalSince(prewarm.startedAt) > Self.prewarmModelLifetime {
+            model = SpaceSwitcherEngine.buildModel()
+        }
+        model = model.replacingImages(prewarm.images)
+        DebugLogger.log("SpaceSwitcher", details: "activation: prewarm \(Int(Date().timeIntervalSince(prewarm.startedAt) * 1000)) ms old, \(prewarm.visited)/\(prewarm.order.count) captured, \(prewarm.images.count) changed")
+        guard model.allSpaces.count > 1 else {
+            cancelPrewarm()
+            onSessionEnd?()
+            return
+        }
 
         let state = SpaceSwitcherState(model: model)
         state.onCommit = { [weak self] space in
@@ -158,14 +268,22 @@ final class SpaceSwitchingCoordinator {
             state.advance(backward: isShiftPressed)
         }
 
+        if commitOnActivation, !Defaults[.spaceSwitcherStayOpenOnRelease] {
+            // Quick tap: the modifier was already up before previews were
+            // ready, so switch without ever showing the panel.
+            DebugLogger.log("SpaceSwitcher", details: "activation: modifier released during preview wait; committing directly")
+            commitSelection()
+            return
+        }
+
+        let screen = Self.targetScreen()
         // A new panel every session: an NSPanel that was on screen when Mission
         // Control opened can come back with a zero frame and never show again.
         self.panel?.close()
         let panel = SpaceSwitcherPanelCoordinator()
         self.panel = panel
         panel.show(state: state, on: screen)
-
-        scheduleThumbnailRefresh(for: state, on: screen, skipping: Set(preCaptured.keys), order: captureOrder)
+        // Captures still running keep landing in the panel via the prewarm task.
     }
 
     /// Screen the panel opens on, per the Placement setting; falls back to the
@@ -236,8 +354,8 @@ final class SpaceSwitchingCoordinator {
 
     @MainActor
     private func endSession() {
-        refreshTask?.cancel()
-        refreshTask = nil
+        prewarm?.task?.cancel()
+        prewarm = nil
         sessionID = UUID()
         recentMoves = [:]
         panel?.hide()
@@ -307,9 +425,6 @@ final class SpaceSwitchingCoordinator {
         return context.makeImage() ?? image
     }
 
-    /// Wall-clock allowance for capturing thumbnails before the panel shows.
-    private static let preShowCaptureBudget: TimeInterval = 0.05
-
     /// Every window the panel shows, deduped and capped, most useful first:
     /// missing thumbnails (cold cache renders icon boxes), then current-space
     /// windows (composited live, so captures are cheap and accurate — and
@@ -357,25 +472,6 @@ final class SpaceSwitchingCoordinator {
         return downsample(image, maxDimension: cap)
     }
 
-    /// Captures in order until the budget runs out; returns only the
-    /// thumbnails that actually differ from what the panel already has.
-    private static func captureThumbnails(_ windows: [SpaceSwitcherEngine.SpaceWindow], on screen: NSScreen, budget: TimeInterval) -> [CGWindowID: CGImage] {
-        guard WindowUtil.shouldCaptureWindowImages() else { return [:] }
-        let cap = downsampleCap(cardWidth: Defaults[.spaceSwitcherCardWidth], on: screen)
-        let deadline = Date().addingTimeInterval(budget)
-        var captured: [CGWindowID: CGImage] = [:]
-        var visited = 0
-        for window in windows {
-            guard Date() < deadline else { break }
-            visited += 1
-            guard let fresh = captureThumbnail(window, cap: cap) else { continue }
-            if let old = window.image, !thumbnailsDiffer(old, fresh) { continue }
-            captured[window.id] = fresh
-        }
-        DebugLogger.log("SpaceSwitcher", details: "pre-show pass reached \(visited) of \(windows.count) windows")
-        return captured
-    }
-
     /// True when swapping `old` for `new` would visibly change the tile:
     /// a different shape, or content that differs beyond capture noise.
     /// Compared on a 32×18 grayscale reduction, well under a millisecond.
@@ -404,32 +500,5 @@ final class SpaceSwitchingCoordinator {
             return true
         }
         return drawn ? pixels : nil
-    }
-
-    /// Whatever the pre-show pass did not get to refreshes after the panel is
-    /// already on screen; tiles only swap when the picture really changed.
-    @MainActor
-    private func scheduleThumbnailRefresh(for state: SpaceSwitcherState, on screen: NSScreen, skipping done: Set<CGWindowID>, order: [SpaceSwitcherEngine.SpaceWindow]) {
-        guard WindowUtil.shouldCaptureWindowImages() else { return }
-        let session = sessionID
-        let cap = Self.downsampleCap(cardWidth: min(Defaults[.spaceSwitcherCardWidth], state.maxCardWidth), on: screen)
-        let remaining = order.filter { !done.contains($0.id) }
-        guard !remaining.isEmpty else { return }
-
-        refreshTask = Task(priority: .low) { [weak self] in
-            var refreshed: [CGWindowID: CGImage] = [:]
-            for window in remaining {
-                guard !Task.isCancelled else { return }
-                guard let fresh = Self.captureThumbnail(window, cap: cap) else { continue }
-                if let old = window.image, !Self.thumbnailsDiffer(old, fresh) { continue }
-                refreshed[window.id] = fresh
-            }
-            guard !Task.isCancelled, !refreshed.isEmpty else { return }
-
-            await MainActor.run { [weak self] in
-                guard let self, sessionID == session, let state = self.state else { return }
-                state.model = state.model.replacingImages(refreshed)
-            }
-        }
     }
 }

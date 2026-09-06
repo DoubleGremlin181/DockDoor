@@ -655,6 +655,15 @@ enum SettingsSearchCatalog {
             icon: "hare"
         ),
         SettingsSearchItem(
+            id: "spaceSwitcher.previewDelay",
+            title: String(localized: "Preview delay"),
+            description: String(localized: "Previews start loading the moment the shortcut’s modifier is held; opening waits at most this long for them to finish, so the panel opens on fresh pictures without swapping them in afterwards."),
+            keywords: ["preview", "delay", "thumbnail", "capture", "fresh", "space", "wait"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Behavior"),
+            icon: "timer"
+        ),
+        SettingsSearchItem(
             id: "spaceSwitcher.rememberDisplayLayouts",
             title: String(localized: "Remember desktop layouts per display"),
             description: String(localized: "Uses what the Space Switcher already knows about your windows: when a display is unplugged its desktops are kept apart on the remaining display, and when it comes back its windows return to the desktops it has. Desktops are never created or removed."),

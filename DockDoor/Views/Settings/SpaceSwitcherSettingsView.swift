@@ -8,6 +8,7 @@ struct SpaceSwitcherSettingsView: View {
     @Default(.spaceSwitcherStartOnSecondSpace) var spaceSwitcherStartOnSecondSpace
     @Default(.spaceSwitcherWarpCursor) var spaceSwitcherWarpCursor
     @Default(.spaceSwitcherAnimationSpeed) var animationSpeed
+    @Default(.spaceSwitcherPreviewDelay) var previewDelay
     @Default(.spaceSwitcherPlacementStrategy) var placementStrategy
     @Default(.spaceSwitcherPinnedScreenIdentifier) var pinnedScreenIdentifier
     @Default(.spaceSwitcherDisplayOrder) var displayOrder
@@ -170,6 +171,22 @@ struct SpaceSwitcherSettingsView: View {
                 .pickerStyle(.menu)
                 .settingsSearchTarget("spaceSwitcher.animationSpeed")
                 Text("How fast the desktop slides when switching. The presets match InstantSpaceSwitcher; “macOS default” uses the system’s own animation by focusing a window on the selected Space.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 20)
+
+                HStack {
+                    Text("Preview delay")
+                    Spacer()
+                    Slider(value: $previewDelay, in: 0 ... 0.5, step: 0.05)
+                        .frame(width: 200)
+                    Text(String(format: "%.0f ms", previewDelay * 1000))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 60, alignment: .trailing)
+                }
+                .settingsSearchTarget("spaceSwitcher.previewDelay")
+                Text("Previews start loading the moment the shortcut’s modifier is held; opening waits at most this long for them to finish, so the panel opens on fresh pictures without swapping them in afterwards.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 20)
