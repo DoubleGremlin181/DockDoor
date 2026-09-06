@@ -134,6 +134,13 @@ final class SpaceSwitchingCoordinator {
     }
 
     private var prewarm: PreviewPrewarm?
+    /// Pending start of a prewarm, waiting out the hold threshold.
+    private var prewarmArmTask: Task<Void, Never>?
+    /// The modifier must be held alone this long before a prewarm starts.
+    /// Ordinary chords (Option+arrow, Option+letter) resolve well inside
+    /// this, so they never pay for a model build or a capture; a deliberate
+    /// hold before the trigger key comfortably exceeds it.
+    private static let prewarmHoldThreshold: TimeInterval = 0.15
     /// The trigger key arrived and the panel is waiting for previews.
     private var activationPending = false
     /// The modifier came up during that wait: a quick tap — commit as soon
@@ -143,11 +150,26 @@ final class SpaceSwitchingCoordinator {
     /// come and gone while the modifier was held.
     private static let prewarmModelLifetime: TimeInterval = 2
 
-    /// The chord's modifier is down with no session open: build the model and
-    /// start capturing thumbnails in the background, most useful first.
+    /// The chord's modifier went down with no session open: once it has been
+    /// held alone for the threshold, build the model and start capturing.
+    @MainActor
+    func armPrewarm() {
+        guard state == nil, Defaults[.enableSpaceSwitcher], prewarm == nil, prewarmArmTask == nil else { return }
+        prewarmArmTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.prewarmHoldThreshold * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            prewarmArmTask = nil
+            prewarmPreviews()
+        }
+    }
+
+    /// Build the model and start capturing thumbnails in the background,
+    /// most useful first.
     @MainActor
     func prewarmPreviews() {
         guard state == nil, Defaults[.enableSpaceSwitcher] else { return }
+        prewarmArmTask?.cancel()
+        prewarmArmTask = nil
         if let prewarm, Date().timeIntervalSince(prewarm.startedAt) < Self.prewarmModelLifetime { return }
         prewarm?.task?.cancel()
 
@@ -185,6 +207,8 @@ final class SpaceSwitchingCoordinator {
     @MainActor
     func cancelPrewarm() {
         guard state == nil, !activationPending else { return }
+        prewarmArmTask?.cancel()
+        prewarmArmTask = nil
         if prewarm != nil {
             DebugLogger.log("SpaceSwitcher", details: "prewarm cancelled")
         }

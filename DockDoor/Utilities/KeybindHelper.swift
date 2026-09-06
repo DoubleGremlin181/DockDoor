@@ -1415,8 +1415,9 @@ class KeybindHelper {
 
         if !oldState, isPressed {
             hasProcessedSpaceModifierRelease = false
-            // Start loading previews now; Tab usually follows within a beat.
-            spaceSwitchingCoordinator.prewarmPreviews()
+            // Start loading previews once the modifier has been held a beat;
+            // Tab usually follows a deliberate hold.
+            spaceSwitchingCoordinator.armPrewarm()
         }
 
         if oldState, !isPressed, !spaceSwitchingCoordinator.isSessionActive {
