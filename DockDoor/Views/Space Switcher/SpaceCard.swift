@@ -309,6 +309,10 @@ struct SpaceWindowThumbnail: View {
                     .interpolation(.high)
                     .antialiased(true)
                     .aspectRatio(contentMode: .fill)
+                    // The panel opens on cached previews and swaps in fresh
+                    // captures moments later; crossfade instead of a hard cut.
+                    .id(ObjectIdentifier(cgImage))
+                    .transition(.opacity)
             } else {
                 ZStack {
                     Rectangle().fill(.thinMaterial)
@@ -325,6 +329,7 @@ struct SpaceWindowThumbnail: View {
             }
         }
         .frame(width: width, height: height)
+        .animation(Defaults[.showAnimations] ? .easeInOut(duration: 0.25) : nil, value: window.image.map { ObjectIdentifier($0) })
         .clipShape(RoundedRectangle(cornerRadius: 2, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
