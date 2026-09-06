@@ -126,11 +126,22 @@ final class SpaceSwitchingCoordinator {
             return
         }
 
-        let model = SpaceSwitcherEngine.buildModel()
+        var model = SpaceSwitcherEngine.buildModel()
         guard model.allSpaces.count > 1 else {
             onSessionEnd?()
             return
         }
+
+        // Like the dock preview, capture before showing so the panel does not
+        // open on stale pictures and swap them a moment later — but within a
+        // time budget so the key press still feels instant. Current-space
+        // windows come first; whatever is left refreshes in the background.
+        let screen = Self.targetScreen()
+        let captureOrder = Self.thumbnailCaptureOrder(for: model)
+        let captureStart = Date()
+        let preCaptured = Self.captureThumbnails(captureOrder, on: screen, budget: Self.preShowCaptureBudget)
+        DebugLogger.log("SpaceSwitcher", details: "pre-show capture: \(preCaptured.count) changed of \(captureOrder.count) windows in \(Int(Date().timeIntervalSince(captureStart) * 1000)) ms")
+        model = model.replacingImages(preCaptured)
 
         let state = SpaceSwitcherState(model: model)
         state.onCommit = { [weak self] space in
@@ -147,7 +158,6 @@ final class SpaceSwitchingCoordinator {
             state.advance(backward: isShiftPressed)
         }
 
-        let screen = Self.targetScreen()
         // A new panel every session: an NSPanel that was on screen when Mission
         // Control opened can come back with a zero frame and never show again.
         self.panel?.close()
@@ -155,7 +165,7 @@ final class SpaceSwitchingCoordinator {
         self.panel = panel
         panel.show(state: state, on: screen)
 
-        scheduleThumbnailRefresh(for: state, on: screen)
+        scheduleThumbnailRefresh(for: state, on: screen, skipping: Set(preCaptured.keys), order: captureOrder)
     }
 
     /// Screen the panel opens on, per the Placement setting; falls back to the
@@ -297,28 +307,15 @@ final class SpaceSwitchingCoordinator {
         return context.makeImage() ?? image
     }
 
-    /// Off-space window images come from the cache and can be stale; refresh the
-    /// most-recent few per space after the panel is already on screen.
-    @MainActor
-    private func scheduleThumbnailRefresh(for state: SpaceSwitcherState, on screen: NSScreen) {
-        guard WindowUtil.shouldCaptureWindowImages() else { return }
-        let session = sessionID
-        let model = state.model
+    /// Wall-clock allowance for capturing thumbnails before the panel shows.
+    private static let preShowCaptureBudget: TimeInterval = 0.05
 
-        // Cap thumbnails near their largest possible rendered size: a tile can
-        // be nearly card-width, and on Retina that is points × scale physical
-        // pixels — a fixed 800 cap would upscale (blur) on cards wider than
-        // ~400 points.
-        let cardWidth = min(Defaults[.spaceSwitcherCardWidth], state.maxCardWidth)
-        let downsampleCap = max(800, cardWidth * screen.backingScaleFactor)
-
-        // Refresh every window the panel shows, deduped and capped. Cached
-        // images can be arbitrarily old (a tab change is a title-only AX event
-        // that never recaptures), so current-space windows are not exempt.
-        // Priority: missing thumbnails (cold cache renders icon boxes), then
-        // current-space windows (composited live, so captures are cheap and
-        // accurate — and their content just changed under the user), then
-        // off-space ones (whose captures return the last-drawn frame anyway).
+    /// Every window the panel shows, deduped and capped, most useful first:
+    /// missing thumbnails (cold cache renders icon boxes), then current-space
+    /// windows (composited live, so captures are cheap and accurate — and
+    /// their content just changed under the user), then off-space ones
+    /// (whose captures return the last-drawn frame anyway).
+    private static func thumbnailCaptureOrder(for model: SpaceSwitcherEngine.Model) -> [SpaceSwitcherEngine.SpaceWindow] {
         let currentSpaceIDs = Set(model.allSpaces.filter(\.isCurrent).map(\.id))
         var priority: [CGWindowID: Int] = [:]
         var windowsByID: [CGWindowID: SpaceSwitcherEngine.SpaceWindow] = [:]
@@ -329,67 +326,109 @@ final class SpaceSwitchingCoordinator {
                 priority[window.id] = min(priority[window.id, default: rank], rank)
             }
         }
-        let captureList = Array(
-            windowsByID.values
-                .sorted { priority[$0.id, default: 2] < priority[$1.id, default: 2] }
-                .prefix(24)
-        )
+        return Array(windowsByID.values.sorted { priority[$0.id, default: 2] < priority[$1.id, default: 2] }.prefix(24))
+    }
+
+    /// Cap thumbnails near their largest possible rendered size: a tile can
+    /// be nearly card-width, and on Retina that is points × scale physical
+    /// pixels — a fixed 800 cap would upscale (blur) on cards wider than
+    /// ~400 points.
+    private static func downsampleCap(cardWidth: CGFloat, on screen: NSScreen) -> CGFloat {
+        max(800, cardWidth * screen.backingScaleFactor)
+    }
+
+    /// Fresh capture of one window: full-resolution copy into the shared
+    /// cache (dock previews and the next open seed from it), downsampled
+    /// copy for the tile. nil when capture fails or returns a corrupt sliver
+    /// (seen with Chrome windows whose AX bridge has died).
+    private static func captureThumbnail(_ window: SpaceSwitcherEngine.SpaceWindow, cap: CGFloat) -> CGImage? {
+        var windowID = UInt32(window.id)
+        let quality: CGSWindowCaptureOptions = Defaults[.windowImageCaptureQuality] == .best ? .bestResolution : .nominalResolution
+        guard let images = CGSHWCaptureWindowList(CGSMainConnectionID(), &windowID, 1, [.ignoreGlobalClipShape, quality]) as? [CGImage],
+              let image = images.first,
+              image.width >= WindowUtil.minUsableImageDimension, image.height >= WindowUtil.minUsableImageDimension
+        else { return nil }
+        // The cache is keyed by the display app's pid, which can differ from
+        // the CGS owner for helper-owned windows; windows with no cache entry
+        // have nothing to update.
+        if let cachePid = window.info?.app.processIdentifier {
+            WindowUtil.storeRefreshedWindowImage(image, windowID: window.id, pid: cachePid)
+        }
+        return downsample(image, maxDimension: cap)
+    }
+
+    /// Captures in order until the budget runs out; returns only the
+    /// thumbnails that actually differ from what the panel already has.
+    private static func captureThumbnails(_ windows: [SpaceSwitcherEngine.SpaceWindow], on screen: NSScreen, budget: TimeInterval) -> [CGWindowID: CGImage] {
+        guard WindowUtil.shouldCaptureWindowImages() else { return [:] }
+        let cap = downsampleCap(cardWidth: Defaults[.spaceSwitcherCardWidth], on: screen)
+        let deadline = Date().addingTimeInterval(budget)
+        var captured: [CGWindowID: CGImage] = [:]
+        var visited = 0
+        for window in windows {
+            guard Date() < deadline else { break }
+            visited += 1
+            guard let fresh = captureThumbnail(window, cap: cap) else { continue }
+            if let old = window.image, !thumbnailsDiffer(old, fresh) { continue }
+            captured[window.id] = fresh
+        }
+        DebugLogger.log("SpaceSwitcher", details: "pre-show pass reached \(visited) of \(windows.count) windows")
+        return captured
+    }
+
+    /// True when swapping `old` for `new` would visibly change the tile:
+    /// a different shape, or content that differs beyond capture noise.
+    /// Compared on a 32×18 grayscale reduction, well under a millisecond.
+    static func thumbnailsDiffer(_ old: CGImage, _ new: CGImage) -> Bool {
+        let oldAspect = CGFloat(old.width) / CGFloat(max(1, old.height))
+        let newAspect = CGFloat(new.width) / CGFloat(max(1, new.height))
+        if abs(oldAspect - newAspect) > 0.02 * max(oldAspect, newAspect) { return true }
+        guard let a = grayReduction(old), let b = grayReduction(new) else { return true }
+        var total = 0
+        for index in 0 ..< a.count {
+            total += abs(Int(a[index]) - Int(b[index]))
+        }
+        return Double(total) / Double(a.count) > 3
+    }
+
+    private static func grayReduction(_ image: CGImage) -> [UInt8]? {
+        let width = 32, height = 18
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.interpolationQuality = .low
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        return drawn ? pixels : nil
+    }
+
+    /// Whatever the pre-show pass did not get to refreshes after the panel is
+    /// already on screen; tiles only swap when the picture really changed.
+    @MainActor
+    private func scheduleThumbnailRefresh(for state: SpaceSwitcherState, on screen: NSScreen, skipping done: Set<CGWindowID>, order: [SpaceSwitcherEngine.SpaceWindow]) {
+        guard WindowUtil.shouldCaptureWindowImages() else { return }
+        let session = sessionID
+        let cap = Self.downsampleCap(cardWidth: min(Defaults[.spaceSwitcherCardWidth], state.maxCardWidth), on: screen)
+        let remaining = order.filter { !done.contains($0.id) }
+        guard !remaining.isEmpty else { return }
 
         refreshTask = Task(priority: .low) { [weak self] in
             var refreshed: [CGWindowID: CGImage] = [:]
-            for window in captureList {
+            for window in remaining {
                 guard !Task.isCancelled else { return }
-                if let image = try? await WindowUtil.captureWindowImage(
-                    windowID: window.id,
-                    pid: window.pid,
-                    windowTitle: window.title,
-                    forceRefresh: true
-                ) {
-                    // A corrupt backing store captures as a 1-2px sliver (seen
-                    // with Chrome windows whose AX bridge has died); keep the
-                    // last good thumbnail instead, matching the cache's policy.
-                    guard image.width >= WindowUtil.minUsableImageDimension,
-                          image.height >= WindowUtil.minUsableImageDimension
-                    else { continue }
-                    // Full-resolution copy into the shared cache so dock
-                    // previews and the next open seed from it. The cache is
-                    // keyed by the display app's pid, which can differ from
-                    // the CGS owner for helper-owned windows; windows with no
-                    // cache entry have nothing to update.
-                    if let cachePid = window.info?.app.processIdentifier {
-                        WindowUtil.storeRefreshedWindowImage(image, windowID: window.id, pid: cachePid)
-                    }
-                    // High-quality pre-downsample: thumbnails render at a small
-                    // fraction of capture size, and GPU minification aliases
-                    // text badly; a single CG resample keeps it legible.
-                    refreshed[window.id] = Self.downsample(image, maxDimension: downsampleCap)
-                }
+                guard let fresh = Self.captureThumbnail(window, cap: cap) else { continue }
+                if let old = window.image, !Self.thumbnailsDiffer(old, fresh) { continue }
+                refreshed[window.id] = fresh
             }
             guard !Task.isCancelled, !refreshed.isEmpty else { return }
 
             await MainActor.run { [weak self] in
                 guard let self, sessionID == session, let state = self.state else { return }
-                var updatedMap = state.model.windowsBySpace
-                for (spaceID, windows) in updatedMap {
-                    updatedMap[spaceID] = windows.map { window in
-                        guard let image = refreshed[window.id] else { return window }
-                        return SpaceSwitcherEngine.SpaceWindow(
-                            id: window.id,
-                            pid: window.pid,
-                            frame: window.frame,
-                            title: window.title,
-                            appName: window.appName,
-                            icon: window.icon,
-                            image: image,
-                            isSticky: window.isSticky,
-                            info: window.info
-                        )
-                    }
-                }
-                state.model = SpaceSwitcherEngine.Model(
-                    displays: state.model.displays,
-                    windowsBySpace: updatedMap
-                )
+                state.model = state.model.replacingImages(refreshed)
             }
         }
     }
