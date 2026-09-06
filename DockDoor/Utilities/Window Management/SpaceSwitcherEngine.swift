@@ -354,6 +354,13 @@ enum SpaceSwitcherEngine {
     /// Monotonic commit counter so a stale verify task never fights a newer commit
     @MainActor private static var commitGeneration = 0
 
+    /// "When switching to an application, switch to a Space with open windows"
+    /// (System Settings → Desktop & Dock). On by default; when off, focusing a
+    /// window on another Space does not switch to it.
+    static var switchesSpaceOnActivation: Bool {
+        (CFPreferencesCopyAppValue("workspaces-auto-swoosh" as CFString, "com.apple.dock" as CFString) as? Bool) ?? true
+    }
+
     @MainActor
     static func switchTo(space: SpaceInfo, in model: Model) {
         // Resolve current state freshly at commit time: the user may have
@@ -368,39 +375,62 @@ enum SpaceSwitcherEngine {
         commitGeneration += 1
         let generation = commitGeneration
         let originSpaceID = display.currentSpaceID
+        let focusTarget = model.windowsBySpace[space.id]?.first(where: { !$0.isSticky && $0.info != nil })?.info
 
-        // Primary: Dock-swipe gesture — the Dock performs the switch natively,
-        // so Mission Control stays in sync and works for empty spaces too.
+        // Primary for non-empty Spaces: focus its frontmost window — macOS
+        // jumps straight to that Space in one slide, however far away it is,
+        // and the Dock stays in sync because it is an ordinary activation.
+        // Empty Spaces have nothing to focus, so they take the Dock-swipe
+        // gesture, one step per Space.
+        if let focusTarget, switchesSpaceOnActivation {
+            focusTarget.bringToFront()
+            verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 500_000_000) {
+                DebugLogger.log("SpaceSwitcherEngine", details: "focus did not switch; gesture fallback to \(space.id)")
+                gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: nil)
+            }
+        } else {
+            gestureThenVerify(space: space, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget)
+        }
+
+        Task.detached(priority: .low) {
+            await WindowUtil.updateAllWindowsInCurrentSpace()
+        }
+    }
+
+    @MainActor
+    private static func gestureThenVerify(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?) {
+        let freshDisplays = WindowSpaces.displaySpacesSnapshot()
+        guard let display = freshDisplays.first(where: { $0.identifier == space.displayIdentifier }) else { return }
         WindowSpaces.switchViaDockGesture(
             to: space,
             on: display,
             keepCursor: Defaults[.spaceSwitcherWarpCursor]
         )
+        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, after: 900_000_000) {
+            if let focusTarget {
+                DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; bringToFront fallback wid=\(focusTarget.id)")
+                focusTarget.bringToFront()
+            } else {
+                DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; CGS fallback to \(space.id)")
+                WindowSpaces.setCurrentSpace(space.id, onDisplay: space.displayIdentifier)
+            }
+        }
+    }
 
-        // Verify; fall back to focusing an MRU window on the target space, then
-        // to the raw CGS call as a last resort. Bail if a newer commit exists or
-        // the display is no longer on the origin space (the gesture landed, or
-        // the user navigated on their own — never yank them around).
+    /// Runs `fallback` if, after the delay, the display is still on the
+    /// origin Space. Bails if a newer commit exists or the user navigated on
+    /// their own — never yank them around.
+    @MainActor
+    private static func verifySwitch(space: SpaceInfo, generation: Int, originSpaceID: CGSSpaceID?, after nanoseconds: UInt64, fallback: @escaping @MainActor () -> Void) {
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 900_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
             guard generation == commitGeneration else { return }
             let displays = WindowSpaces.displaySpacesSnapshot()
             guard let current = displays.first(where: { $0.identifier == space.displayIdentifier }),
                   current.currentSpaceID != space.id,
                   current.currentSpaceID == originSpaceID
             else { return }
-
-            if let info = model.windowsBySpace[space.id]?.first(where: { !$0.isSticky && $0.info != nil })?.info {
-                DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; bringToFront fallback wid=\(info.id)")
-                info.bringToFront()
-            } else {
-                DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; CGS fallback to \(space.id)")
-                WindowSpaces.setCurrentSpace(space.id, onDisplay: space.displayIdentifier)
-            }
-        }
-
-        Task.detached(priority: .low) {
-            await WindowUtil.updateAllWindowsInCurrentSpace()
+            fallback()
         }
     }
 
