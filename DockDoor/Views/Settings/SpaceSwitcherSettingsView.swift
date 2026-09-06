@@ -49,7 +49,7 @@ struct SpaceSwitcherSettingsView: View {
                     Text("Remember desktop layouts per display")
                 }
                 .settingsSearchTarget("spaceSwitcher.rememberDisplayLayouts")
-                Text("Uses what the Space Switcher already knows about your windows: when a display is unplugged its desktops are kept apart on the remaining display, and when it comes back its windows return to the desktops it has. Desktops are never created or removed.")
+                Text("When a display is unplugged, the windows from its desktops are kept apart on the remaining display and moved back when it returns. Only windows the Space Switcher has seen are remembered; desktops are never created or removed.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 20)
@@ -170,7 +170,7 @@ struct SpaceSwitcherSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .settingsSearchTarget("spaceSwitcher.animationSpeed")
-                Text("How fast the desktop slides when switching. The presets match InstantSpaceSwitcher; “macOS default” uses the system’s own animation by focusing a window on the selected Space.")
+                Text("How fast the desktop slides when switching. “macOS default” lets the system animate by focusing a window on the selected Space.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 20)
@@ -186,7 +186,7 @@ struct SpaceSwitcherSettingsView: View {
                         .frame(width: 60, alignment: .trailing)
                 }
                 .settingsSearchTarget("spaceSwitcher.previewDelay")
-                Text("Previews load when the shortcut’s modifier is pressed and are kept for a minute; opening waits at most this long for a load still in progress, so the panel opens on fresh pictures without swapping them in afterwards.")
+                Text("How long opening waits for previews still loading. Previews start loading when the shortcut’s modifier is pressed and are kept for a minute.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 20)

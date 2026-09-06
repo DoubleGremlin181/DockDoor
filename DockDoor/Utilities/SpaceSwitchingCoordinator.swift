@@ -5,7 +5,6 @@ import Defaults
 final class SpaceSwitchingCoordinator {
     private var panel: SpaceSwitcherPanelCoordinator?
     private var state: SpaceSwitcherState?
-    private var sessionID = UUID()
     /// Windows this session moved, pinned to their target space until CGS
     /// starts reporting their assignment again (it returns [] right after a
     /// move, which would otherwise drop them from every card).
@@ -16,43 +15,28 @@ final class SpaceSwitchingCoordinator {
     /// including card clicks that never route back through the event tap.
     var onSessionEnd: (() -> Void)?
 
-    private var learningObserver: NSObjectProtocol?
-    private var screenChangeObserver: NSObjectProtocol?
+    private var topologySubscription: UUID?
     private var restoreObserver: NSObjectProtocol?
 
     init() {
-        // The one space-change observer, serving both lifecycles:
-        // - keep the open session's current-space markers fresh if the user
-        //   switches spaces natively (trackpad swipe, other tools);
-        // - learn window→space attributions from normal space usage so
-        //   previews are complete without ever having opened the switcher
-        //   on a space (debounced until the switch settles).
-        learningObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.activeSpaceDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.handleActiveSpaceChanged()
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                Task { @MainActor in SpaceSwitcherEngine.learnVisibleWindows() }
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            Task { @MainActor in SpaceSwitcherEngine.learnVisibleWindows() }
-        }
+        // Learning from normal space usage is shared with display layout
+        // memory; whichever feature starts first turns it on.
+        Task { @MainActor in SpaceSwitcherEngine.startLearning() }
 
-        // Display added/removed (or resolution changed): the session's model
-        // rows and the panel's screen are stale, and macOS migrates spaces to
-        // new IDs — cancel any open session and relearn once things settle.
-        screenChangeObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        topologySubscription = SpaceTopology.shared.subscribe { [weak self] event in
             Task { @MainActor [weak self] in
-                self?.handleScreenParametersChanged()
+                switch event {
+                case .activeSpaceChanged:
+                    // Keep an open session's current-space markers fresh if
+                    // the user switches natively (trackpad swipe, other tools).
+                    self?.handleActiveSpaceChanged()
+                case .displaysChanged, .screenParametersChanged:
+                    // Display added/removed or resolution changed: the
+                    // session's rows and the panel's screen are stale.
+                    self?.handleScreenParametersChanged()
+                case .displaysWillChange, .willSleep, .didWake:
+                    break
+                }
             }
         }
 
@@ -71,33 +55,20 @@ final class SpaceSwitchingCoordinator {
         }
     }
 
-    /// Display topology changed: the open session (if any) is stale, and the
-    /// persisted learned map may reference migrated space IDs.
     @MainActor
     private func handleScreenParametersChanged() {
-        DebugLogger.log("SpaceSwitcher", details: "screen parameters changed; cancelling session and rescheduling learning")
-        if isSessionActive {
-            cancel()
-        }
-        // Space migration takes a moment; learn (and prune dead space IDs from
-        // the persisted map) once the new topology is stable.
-        relearnTask?.cancel()
-        relearnTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            SpaceSwitcherEngine.learnVisibleWindows()
-        }
+        guard isSessionActive else { return }
+        DebugLogger.log("SpaceSwitcher", details: "screen parameters changed; cancelling session")
+        cancel()
     }
-
-    /// Debounced post-reconfiguration learning pass.
-    private var relearnTask: Task<Void, Never>?
 
     /// Refresh the open session's current-space markers (no-op with no session).
     @MainActor
     private func handleActiveSpaceChanged() {
         guard let state else { return }
+        // The table was just invalidated by the event; one cheap read.
         state.model = SpaceSwitcherEngine.Model(
-            displays: WindowSpaces.displaySpacesSnapshot(order: Defaults[.spaceSwitcherDisplayOrder]),
+            displays: WindowSpaces.displaySpacesSnapshot(order: Defaults[.spaceSwitcherDisplayOrder], maxAge: 0.5),
             windowsBySpace: state.model.windowsBySpace
         )
     }
@@ -116,12 +87,14 @@ final class SpaceSwitchingCoordinator {
 
     /// Thumbnails being captured ahead of a session — started when the
     /// chord's modifier goes down, so by the time the trigger key arrives
-    /// most pictures are already fresh. Keeps feeding the open panel.
+    /// most pictures are already fresh. Keeps feeding the open panel. Holds
+    /// up to 24 downsampled tiles (a few tens of MB worst case) for a minute.
     @MainActor
     private final class PreviewPrewarm {
         let model: SpaceSwitcherEngine.Model
         let order: [SpaceSwitcherEngine.SpaceWindow]
         let startedAt = Date()
+        /// Every capture, uniformly downsampled — the next open seeds from these
         var images: [CGWindowID: CGImage] = [:]
         var visited = 0
         var isComplete = false
@@ -141,14 +114,19 @@ final class SpaceSwitchingCoordinator {
     /// A cached prewarm older than this still opens the panel instantly, but
     /// a fresh pass then runs behind it and swaps only tiles that changed.
     private static let prewarmStaleAge: TimeInterval = 5
+    /// A prewarm's window buckets older than this are rebuilt at activation:
+    /// windows may have come and gone while the modifier was held.
+    private static let prewarmModelLifetime: TimeInterval = 2
+
     /// The trigger key arrived and the panel is waiting for previews.
     private var activationPending = false
-    /// The modifier came up during that wait: a quick tap — commit as soon
-    /// as the session exists instead of showing the panel.
+    /// Commit as soon as the session exists instead of showing the panel:
+    /// the modifier came up during the wait (quick tap) or Return was pressed.
     private var commitOnActivation = false
-    /// A prewarm older than this is rebuilt at activation: windows may have
-    /// come and gone while the modifier was held.
-    private static let prewarmModelLifetime: TimeInterval = 2
+    /// Escape or a click outside arrived during the wait: never show.
+    private var activationCancelled = false
+    /// Trigger presses that arrived during the wait, folded into the session.
+    private var pendingCycles = 0
 
     /// The chord's modifier went down: build the model and start capturing
     /// thumbnails in the background, most useful first — unless a pass from
@@ -156,12 +134,12 @@ final class SpaceSwitchingCoordinator {
     /// completion; it is never thrown away for a chord that turns out to be
     /// something else, so the cost stays bounded.
     @MainActor
-    func prewarmPreviews(force: Bool = false) {
+    func prewarmPreviews(force: Bool = false, model: SpaceSwitcherEngine.Model? = nil) {
         guard Defaults[.enableSpaceSwitcher] else { return }
         if !force, let prewarm, Date().timeIntervalSince(prewarm.startedAt) < Self.prewarmCacheLifetime { return }
         prewarm?.task?.cancel()
 
-        let model = SpaceSwitcherEngine.buildModel()
+        let model = model ?? SpaceSwitcherEngine.buildModel()
         let order = Self.thumbnailCaptureOrder(for: model)
         let prewarm = PreviewPrewarm(model: model, order: order)
         self.prewarm = prewarm
@@ -170,19 +148,23 @@ final class SpaceSwitchingCoordinator {
             prewarm.isComplete = true
             return
         }
-        let cap = Self.downsampleCap(cardWidth: Defaults[.spaceSwitcherCardWidth], on: NSScreen.screens.max { $0.backingScaleFactor < $1.backingScaleFactor } ?? NSScreen.main ?? NSScreen.screens[0])
+        let scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
+        let cap = max(800, Defaults[.spaceSwitcherCardWidth] * scale)
         prewarm.task = Task.detached(priority: .userInitiated) { [weak self, weak prewarm] in
             for window in order {
                 guard !Task.isCancelled else { return }
                 let fresh = Self.captureThumbnail(window, cap: cap)
+                // Compared here, off the main actor: two CG draws per window.
+                let changed = fresh.map { fresh in window.image.map { Self.thumbnailsDiffer($0, fresh) } ?? true } ?? false
                 await MainActor.run { [weak self, weak prewarm] in
                     guard let self, let prewarm, self.prewarm === prewarm else { return }
                     prewarm.visited += 1
-                    if let fresh, window.image.map({ Self.thumbnailsDiffer($0, fresh) }) ?? true {
-                        prewarm.images[window.id] = fresh
-                        if let state {
-                            state.model = state.model.replacingImages([window.id: fresh])
-                        }
+                    guard let fresh else { return }
+                    // Every capture feeds the next open; only a visible change
+                    // is swapped into a panel that is already showing.
+                    prewarm.images[window.id] = fresh
+                    if changed, let state {
+                        state.model = state.model.replacingImages([window.id: fresh])
                     }
                 }
             }
@@ -192,21 +174,16 @@ final class SpaceSwitchingCoordinator {
 
     /// The chord's modifier came up with no session open yet. A cached
     /// prewarm stays for the next press; a pending activation becomes a
-    /// quick tap.
+    /// quick tap (unless the switcher stays open on release).
     @MainActor
     func modifierReleasedBeforeSession() {
-        if activationPending {
+        if activationPending, !Defaults[.spaceSwitcherStayOpenOnRelease] {
             commitOnActivation = true
         }
     }
 
     @MainActor
     func handleActivation(isShiftPressed: Bool) async {
-        // A second trigger press while the first is still waiting for
-        // previews: let it finish, then cycle.
-        while activationPending {
-            try? await Task.sleep(nanoseconds: 4_000_000)
-        }
         if let state {
             if isShiftPressed {
                 state.cycleBackward()
@@ -215,11 +192,30 @@ final class SpaceSwitchingCoordinator {
             }
             return
         }
+        if activationPending {
+            // A second trigger press while the first is still waiting for
+            // previews: fold it into that session rather than racing it.
+            pendingCycles += isShiftPressed ? -1 : 1
+            return
+        }
+        // Unstructured on purpose: the caller runs in KeybindHelper's
+        // held-key task, which every keyDown and a Shift release cancel; a
+        // cancelled Task.sleep returns at once and would spin the wait.
+        await Task { @MainActor [weak self] in
+            await self?.startSession(isShiftPressed: isShiftPressed)
+        }.value
+    }
 
+    @MainActor
+    private func startSession(isShiftPressed: Bool) async {
         activationPending = true
+        activationCancelled = false
+        pendingCycles = 0
         defer {
             activationPending = false
             commitOnActivation = false
+            activationCancelled = false
+            pendingCycles = 0
         }
 
         // Fresh previews before the panel shows, like the dock: wait for a
@@ -229,24 +225,28 @@ final class SpaceSwitchingCoordinator {
         if prewarm == nil {
             prewarmPreviews()
         }
-        if let prewarm, !prewarm.isComplete, !commitOnActivation {
+        if let prewarm, !prewarm.isComplete {
             let deadline = Date().addingTimeInterval(Defaults[.spaceSwitcherPreviewDelay])
-            while !prewarm.isComplete, !commitOnActivation, Date() < deadline {
+            while !prewarm.isComplete, !commitOnActivation, !activationCancelled, Date() < deadline {
                 try? await Task.sleep(nanoseconds: 4_000_000)
             }
         }
-        guard let prewarm else {
+        guard let prewarm, !activationCancelled else {
             onSessionEnd?()
             return
         }
 
+        // Window buckets from the prewarm when recent; the current-space
+        // markers always fresh (the user may have switched natively since).
         let prewarmAge = Date().timeIntervalSince(prewarm.startedAt)
-        var model = prewarm.model
-        if prewarmAge > Self.prewarmModelLifetime {
-            model = SpaceSwitcherEngine.buildModel()
-        }
+        var model = prewarmAge > Self.prewarmModelLifetime
+            ? SpaceSwitcherEngine.buildModel()
+            : SpaceSwitcherEngine.Model(
+                displays: WindowSpaces.displaySpacesSnapshot(order: Defaults[.spaceSwitcherDisplayOrder]),
+                windowsBySpace: prewarm.model.windowsBySpace
+            )
         model = model.replacingImages(prewarm.images)
-        DebugLogger.log("SpaceSwitcher", details: "activation: prewarm \(Int(prewarmAge * 1000)) ms old, \(prewarm.visited)/\(prewarm.order.count) captured, \(prewarm.images.count) changed")
+        DebugLogger.log("SpaceSwitcher", details: "activation: prewarm \(Int(prewarmAge * 1000)) ms old, \(prewarm.visited)/\(prewarm.order.count) captured")
         guard model.allSpaces.count > 1 else {
             onSessionEnd?()
             return
@@ -260,17 +260,19 @@ final class SpaceSwitchingCoordinator {
             Task { @MainActor [weak self] in self?.moveWindow(windowID, to: space) }
         }
         self.state = state
-        sessionID = UUID()
 
         // First press advances off the current space, mirroring cmd+tab
         if Defaults[.spaceSwitcherStartOnSecondSpace] {
             state.advance(backward: isShiftPressed)
         }
+        if pendingCycles != 0 {
+            state.cycle(by: pendingCycles)
+        }
 
-        if commitOnActivation, !Defaults[.spaceSwitcherStayOpenOnRelease] {
-            // Quick tap: the modifier was already up before previews were
-            // ready, so switch without ever showing the panel.
-            DebugLogger.log("SpaceSwitcher", details: "activation: modifier released during preview wait; committing directly")
+        if commitOnActivation {
+            // Quick tap (or Return): the modifier was already up before
+            // previews were ready, so switch without showing the panel.
+            DebugLogger.log("SpaceSwitcher", details: "activation: committed during the preview wait")
             commitSelection()
             return
         }
@@ -285,7 +287,7 @@ final class SpaceSwitchingCoordinator {
         // Captures still running keep landing in the panel via the prewarm
         // task; a cached pass that has gone stale is redone behind the panel.
         if prewarm.isComplete, prewarmAge > Self.prewarmStaleAge {
-            prewarmPreviews(force: true)
+            prewarmPreviews(force: true, model: model)
         }
     }
 
@@ -308,7 +310,11 @@ final class SpaceSwitchingCoordinator {
     @MainActor
     func commitSelection() {
         guard let state, let space = state.selectedSpace else {
-            cancel()
+            if activationPending {
+                commitOnActivation = true // Return during the preview wait
+            } else {
+                cancel()
+            }
             return
         }
         commit(space)
@@ -316,6 +322,9 @@ final class SpaceSwitchingCoordinator {
 
     @MainActor
     func cancel() {
+        if activationPending {
+            activationCancelled = true // Escape or click-outside during the wait
+        }
         endSession()
     }
 
@@ -357,7 +366,6 @@ final class SpaceSwitchingCoordinator {
 
     @MainActor
     private func endSession() {
-        sessionID = UUID()
         recentMoves = [:]
         panel?.hide()
         panel?.close()
@@ -445,14 +453,6 @@ final class SpaceSwitchingCoordinator {
         return Array(windowsByID.values.sorted { priority[$0.id, default: 2] < priority[$1.id, default: 2] }.prefix(24))
     }
 
-    /// Cap thumbnails near their largest possible rendered size: a tile can
-    /// be nearly card-width, and on Retina that is points × scale physical
-    /// pixels — a fixed 800 cap would upscale (blur) on cards wider than
-    /// ~400 points.
-    private static func downsampleCap(cardWidth: CGFloat, on screen: NSScreen) -> CGFloat {
-        max(800, cardWidth * screen.backingScaleFactor)
-    }
-
     /// Fresh capture of one window: full-resolution copy into the shared
     /// cache (dock previews and the next open seed from it), downsampled
     /// copy for the tile. nil when capture fails or returns a corrupt sliver
@@ -475,7 +475,7 @@ final class SpaceSwitchingCoordinator {
 
     /// True when swapping `old` for `new` would visibly change the tile:
     /// a different shape, or content that differs beyond capture noise.
-    /// Compared on a 32×18 grayscale reduction, well under a millisecond.
+    /// Compared on a 32×18 grayscale reduction. Internal for testing.
     static func thumbnailsDiffer(_ old: CGImage, _ new: CGImage) -> Bool {
         let oldAspect = CGFloat(old.width) / CGFloat(max(1, old.height))
         let newAspect = CGFloat(new.width) / CGFloat(max(1, new.height))

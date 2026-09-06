@@ -62,7 +62,7 @@ final class SpaceSwitcherState: ObservableObject {
     /// Trigger-key cycling walks every Space on every display in row-major
     /// order (wrapping), symmetric forward/backward; arrow keys move within and
     /// between rows.
-    private func cycle(by delta: Int) {
+    func cycle(by delta: Int) {
         let flattened = flattenedPositions()
         guard !flattened.isEmpty else { return }
         let current = flattened.firstIndex(of: selection) ?? 0

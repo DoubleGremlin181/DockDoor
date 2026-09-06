@@ -1,3 +1,4 @@
+import AppKit
 @testable import DockDoor
 import Testing
 
@@ -84,5 +85,26 @@ struct GhostFilterTests {
 
     @Test func partiallyOffscreenAttributionIsAccepted() {
         #expect(SpaceSwitcherEngine.ghostFilterVerdict(spaces: [1, 3], isOnscreen: false, currentSpaceIDs: [1], isKnownToDiscovery: true, hasTitle: true) == .accept)
+    }
+}
+
+struct ThumbnailDiffTests {
+    private func solid(_ gray: CGFloat, width: Int = 64, height: Int = 36) -> CGImage {
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
+        context.setFillColor(CGColor(gray: gray, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()!
+    }
+
+    @Test func identicalImagesDoNotDiffer() {
+        #expect(!SpaceSwitchingCoordinator.thumbnailsDiffer(solid(0.5), solid(0.5)))
+    }
+
+    @Test func contentChangeDiffers() {
+        #expect(SpaceSwitchingCoordinator.thumbnailsDiffer(solid(0.2), solid(0.8)))
+    }
+
+    @Test func shapeChangeDiffers() {
+        #expect(SpaceSwitchingCoordinator.thumbnailsDiffer(solid(0.5), solid(0.5, width: 36, height: 64)))
     }
 }

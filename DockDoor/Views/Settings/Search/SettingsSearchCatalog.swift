@@ -648,7 +648,7 @@ enum SettingsSearchCatalog {
         SettingsSearchItem(
             id: "spaceSwitcher.animationSpeed",
             title: String(localized: "Animation speed"),
-            description: String(localized: "How fast the desktop slides when switching. The presets match InstantSpaceSwitcher; “macOS default” uses the system’s own animation by focusing a window on the selected Space."),
+            description: String(localized: "How fast the desktop slides when switching. “macOS default” lets the system animate by focusing a window on the selected Space."),
             keywords: ["animation", "speed", "fast", "instant", "slide", "space", "switch", "InstantSpaceSwitcher"],
             tab: "SpaceSwitcher",
             section: String(localized: "Behavior"),
@@ -657,7 +657,7 @@ enum SettingsSearchCatalog {
         SettingsSearchItem(
             id: "spaceSwitcher.previewDelay",
             title: String(localized: "Preview delay"),
-            description: String(localized: "Previews load when the shortcut’s modifier is pressed and are kept for a minute; opening waits at most this long for a load still in progress, so the panel opens on fresh pictures without swapping them in afterwards."),
+            description: String(localized: "How long opening waits for previews still loading. Previews start loading when the shortcut’s modifier is pressed and are kept for a minute."),
             keywords: ["preview", "delay", "thumbnail", "capture", "fresh", "space", "wait"],
             tab: "SpaceSwitcher",
             section: String(localized: "Behavior"),
@@ -666,7 +666,7 @@ enum SettingsSearchCatalog {
         SettingsSearchItem(
             id: "spaceSwitcher.rememberDisplayLayouts",
             title: String(localized: "Remember desktop layouts per display"),
-            description: String(localized: "Uses what the Space Switcher already knows about your windows: when a display is unplugged its desktops are kept apart on the remaining display, and when it comes back its windows return to the desktops it has. Desktops are never created or removed."),
+            description: String(localized: "When a display is unplugged, the windows from its desktops are kept apart on the remaining display and moved back when it returns. Only windows the Space Switcher has seen are remembered; desktops are never created or removed."),
             keywords: ["display", "monitor", "unplug", "disconnect", "reconnect", "desktop", "layout", "remember", "restore", "dock", "clamshell", "external"],
             tab: "SpaceSwitcher",
             section: String(localized: "Display memory"),

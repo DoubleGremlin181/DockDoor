@@ -570,11 +570,8 @@ extension WindowUtil {
         }
         // A corrupt backing store (Chrome with a dead AX bridge) captures as
         // a 1-2px sliver; rendered, its aspect ratio makes a tall narrow tile.
-        // Keep the last good image instead, or nothing.
-        if capturedImage.width < minUsableImageDimension || capturedImage.height < minUsableImageDimension {
-            if let cachedImage = desktopSpaceWindowCacheManager.readCache(pid: pid).first(where: { $0.id == windowID })?.image {
-                return cachedImage
-            }
+        // Fail instead: every caller keeps the previous image on failure.
+        guard capturedImage.width >= minUsableImageDimension, capturedImage.height >= minUsableImageDimension else {
             throw captureError
         }
         cgImage = capturedImage

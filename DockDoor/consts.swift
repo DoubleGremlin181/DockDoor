@@ -988,11 +988,6 @@ enum WindowPreviewSortOrder: String, CaseIterable, Defaults.Serializable, Identi
     }
 }
 
-/// How display rows are stacked in the Space Switcher panel when more than
-/// one display has its own Spaces.
-/// How fast the Dock slides to the selected Space. The presets and their
-/// gesture velocities mirror InstantSpaceSwitcher; `system` leaves the
-/// animation to macOS by focusing a window on the target Space instead.
 enum SpaceSwitcherAnimationSpeed: String, CaseIterable, Defaults.Serializable, Identifiable {
     case system
     case normal
@@ -1027,6 +1022,11 @@ enum SpaceSwitcherAnimationSpeed: String, CaseIterable, Defaults.Serializable, I
     }
 }
 
+/// How display rows are stacked in the Space Switcher panel when more than
+/// one display has its own Spaces.
+/// How fast the Dock slides to the selected Space. The presets and their
+/// gesture velocities mirror InstantSpaceSwitcher; `system` leaves the
+/// animation to macOS by focusing a window on the target Space instead.
 enum SpaceSwitcherDisplayOrder: String, CaseIterable, Defaults.Serializable, Identifiable {
     case mainDisplayFirst
     case leftToRight
