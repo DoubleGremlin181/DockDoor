@@ -4,8 +4,9 @@ import Defaults
 /// Keeps an unplugged display's desktops apart on the remaining display and
 /// moves the windows back when it returns. Nothing is polled: the memory is
 /// the Space Switcher's learned window→space map plus the per-display space
-/// list it refreshes whenever it looks at the spaces anyway. Desktops are
-/// never created or removed.
+/// list and window frames it notes whenever it reads the spaces anyway.
+/// Only windows that learning has seen are remembered; desktops are never
+/// created or removed.
 @MainActor
 final class DisplayLayoutMemory {
     static let shared = DisplayLayoutMemory()
@@ -28,8 +29,9 @@ final class DisplayLayoutMemory {
     private var learnedAtChange: [CGWindowID: Set<CGSSpaceID>]?
     private var tableAtChange: [String: DisplaySpacesRecord]?
     /// Window → (display it was on, frame relative to that display), from
-    /// the same passes that feed the learned map. In memory only; the
-    /// relevant entries are persisted with a pending restore.
+    /// the same passes that feed the learned map. In memory only, so a
+    /// display that returns after a relaunch is restored with relative
+    /// placement; the relevant entries are persisted with a pending restore.
     private var frames: [CGWindowID: (displayKey: String, relative: CGRect)] = [:]
     private var framesAtChange: [CGWindowID: (displayKey: String, relative: CGRect)]?
     private var restoringKeys: Set<String> = []
@@ -53,14 +55,30 @@ final class DisplayLayoutMemory {
         isRunning = true
         DebugLogger.log("DisplayLayoutMemory", details: "start session=\(sessionToken) supported=\(isSupported)")
 
-        let observer = DisplayReconfigurationObserver(signatureProvider: { Self.currentSignature() })
+        SpaceSwitcherEngine.startLearning()
+        let observer = DisplayReconfigurationObserver(signatureProvider: { SpaceTopology.shared.displays().signature })
         observer.busyProvider = { Self.isBusy() }
         observer.onCapturePreChange = { [weak self] in self?.capturePreChange() }
         observer.onAct = { [weak self] change in self?.act(on: change) }
+        observer.onIdle = { [weak self] in
+            guard let self else { return }
+            learnedAtChange = nil
+            framesAtChange = nil
+            tableAtChange = nil
+            // The table could not be updated while the burst was in flight.
+            note(spaces: SpaceTopology.shared.spaces().displays, frames: [:])
+        }
         observer.start()
         self.observer = observer
 
         synthesizePendingForAbsentDisplays()
+        // A display that came back while DockDoor was not running still has
+        // its pending restore; give the window cache a moment, then run it.
+        actionTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await restoreNow()
+        }
     }
 
     func stop() {
@@ -83,26 +101,22 @@ final class DisplayLayoutMemory {
         DebugLogger.log("DisplayLayoutMemory", details: "forgot all layouts")
     }
 
-    // MARK: - Space table
+    // MARK: - Space table and frames
 
     /// Called by the Space Switcher whenever it has just read the spaces
-    /// (space changes, learning passes, opening the switcher). Records each
-    /// attached display's desktops; a no-op unless something changed.
-    func noteSpaces(_ displays: [DisplaySpaces]) {
+    /// (space changes, learning passes, opening the switcher), with the CG
+    /// frames of the windows it attributed to a single Space. Records each
+    /// attached display's desktops (a no-op unless something changed) and
+    /// the frames relative to the display they sit on.
+    func note(spaces displays: [DisplaySpaces], frames cgFrames: [CGWindowID: CGRect]) {
         guard isRunning, isSupported, observer?.coalescer.isIdle ?? true, restoringKeys.isEmpty else { return }
-        let identities = DisplayIdentity.identities(for: DisplayIdentity.onlineProbes())
+        let table = SpaceTopology.shared.displays()
         var changed = false
         let now = Date()
         for display in displays {
-            guard let screen = display.screen,
-                  let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
-                  let identity = identities[number.uint32Value]
-            else { continue }
-            if let pending = store.pending[identity.key], pending.restoredAt == nil { continue }
-            let spaces = display.spaces.enumerated().map { index, space in
-                SpaceRecord(uuid: space.uuid, id: space.id, index: index, isFullscreen: space.isFullscreen, wasCurrent: space.isCurrent)
-            }
-            if store.note(DisplaySpacesRecord(identity: identity, spaces: spaces, updatedAt: now)) {
+            guard let record = DisplaySpacesRecord(display, identities: table, sessionToken: sessionToken, at: now) else { continue }
+            if store.pending[record.identity.key] != nil { continue }
+            if store.note(record) {
                 changed = true
             }
         }
@@ -110,19 +124,10 @@ final class DisplayLayoutMemory {
             store.save()
             DebugLogger.log("DisplayLayoutMemory", details: "space table: \(describeTable())")
         }
-    }
 
-    /// Called by the Space Switcher with the CG frames of the windows it just
-    /// attributed to a single space. Only windows that sit on some display
-    /// are remembered, relative to that display's bounds.
-    func noteFrames(_ cgFrames: [CGWindowID: CGRect]) {
-        guard isRunning, !cgFrames.isEmpty, observer?.coalescer.isIdle ?? true else { return }
-        let probes = DisplayIdentity.onlineProbes()
-        let identities = DisplayIdentity.identities(for: probes)
         for (wid, frame) in cgFrames {
-            let center = CGPoint(x: frame.midX, y: frame.midY)
-            guard let probe = probes.first(where: { $0.bounds.contains(center) }),
-                  let identity = identities[probe.displayID]
+            guard let probe = table.probe(containing: CGPoint(x: frame.midX, y: frame.midY)),
+                  let identity = table.identities[probe.displayID]
             else { continue }
             frames[wid] = (identity.key, frame.offsetBy(dx: -probe.bounds.minX, dy: -probe.bounds.minY))
         }
@@ -143,18 +148,21 @@ final class DisplayLayoutMemory {
     /// display is absent: treat it as removed now. Only useful within the
     /// login session that learned the windows.
     private func synthesizePendingForAbsentDisplays() {
-        let attachedKeys = Set(DisplayIdentity.identities(for: DisplayIdentity.onlineProbes()).values.map(\.key))
+        let attachedKeys = SpaceTopology.shared.displays().attachedKeys
         let absent = store.displays.filter { !attachedKeys.contains($0.key) && store.pending[$0.key] == nil }
         guard !absent.isEmpty else { return }
+        // Read the learned map before capturing: capture rebuilds the
+        // switcher model, which relearns folded windows onto the host.
+        let learned = SpaceSwitcherEngine.learnedSnapshot()
         let live = LiveState.capture()
         for (key, record) in absent {
             let plan = DisplayLayoutReconciler.planDisconnect(
                 record: record,
-                learned: SpaceSwitcherEngine.learnedSnapshot(),
+                learned: learned,
                 preexistingSpaceUUIDs: preexistingSpaceUUIDs(excluding: key, table: store.displays),
                 after: live,
                 useEmptyDesktops: false,
-                sessionToken: sessionToken
+                sessionToken: record.sessionToken
             )
             store.pending[key] = plan.pending
             DebugLogger.log("DisplayLayoutMemory", details: "synthesized pending restore for absent \(record.identity.localizedName) [\(key)]: migrations=\(plan.pending.migrations) windows=\(plan.pending.windowsBySpace)")
@@ -170,6 +178,7 @@ final class DisplayLayoutMemory {
 
     private func act(on change: DisplayReconfigurationObserver.Change) {
         actionTask?.cancel()
+        let observer = observer
         actionTask = Task { @MainActor [weak self] in
             guard let self else { return }
             await process(change)
@@ -190,9 +199,13 @@ final class DisplayLayoutMemory {
         }
 
         if !change.removed.isEmpty {
-            let live = LiveState.capture()
+            // Read the learned map before capturing: capture rebuilds the
+            // switcher model, which relearns folded windows onto the host.
+            let learned = learnedAtChange ?? SpaceSwitcherEngine.learnedSnapshot()
             for key in change.removed.sorted() {
-                await handleRemoval(of: key, after: live)
+                // Fresh capture per display: the previous removal's un-fold
+                // may have taken the empty desktop this one would choose.
+                await handleRemoval(of: key, learned: learned, after: LiveState.capture())
                 if Task.isCancelled { return }
             }
             store.save()
@@ -205,7 +218,7 @@ final class DisplayLayoutMemory {
         store.save()
     }
 
-    private func handleRemoval(of key: String, after live: LiveState) async {
+    private func handleRemoval(of key: String, learned: [CGWindowID: Set<CGSSpaceID>], after live: LiveState) async {
         let table = tableAtChange ?? store.displays
         guard let record = table[key] else {
             DebugLogger.log("DisplayLayoutMemory", details: "removed display \(key) has no remembered desktops")
@@ -213,12 +226,12 @@ final class DisplayLayoutMemory {
         }
         let plan = DisplayLayoutReconciler.planDisconnect(
             record: record,
-            learned: learnedAtChange ?? SpaceSwitcherEngine.learnedSnapshot(),
+            learned: learned,
             preexistingSpaceUUIDs: preexistingSpaceUUIDs(excluding: key, table: table),
             after: live,
             useEmptyDesktops: Defaults[.spaceSwitcherKeepUnpluggedDesktopsSeparate],
             frames: (framesAtChange ?? frames).filter { $0.value.displayKey == key }.mapValues(\.relative),
-            sessionToken: sessionToken
+            sessionToken: record.sessionToken
         )
         store.displays[key] = record
         store.pending[key] = plan.pending
@@ -234,35 +247,40 @@ final class DisplayLayoutMemory {
     }
 
     private func restore(displayKey key: String) async {
-        guard var pending = store.pending[key] else { return }
+        guard let pending = store.pending[key] else { return }
         restoringKeys.insert(key)
         defer { restoringKeys.remove(key) }
-        NotificationCenter.default.post(name: Self.restoreWillBegin, object: nil)
 
         let live = LiveState.capture()
         let plan = DisplayLayoutReconciler.planReconnect(pending: pending, live: live, sessionToken: sessionToken)
         DebugLogger.log("DisplayLayoutMemory", details: "restore \(pending.record.identity.localizedName) [\(key)]: assignments=\(plan.assignments) moves=\(plan.moves) skipped=\(plan.skipped) ops=\(plan.operations) notes=\(plan.notes)")
-        let moved = await execute(plan.operations)
+        // Nothing to assign yet (the display's Spaces not populated): keep
+        // the pending for the next display event.
+        let hasUserDesktops = pending.record.spaces.contains { !$0.isFullscreen }
+        guard !plan.assignments.isEmpty || !hasUserDesktops else {
+            DebugLogger.log("DisplayLayoutMemory", details: "restore of \(key) deferred; pending kept")
+            return
+        }
 
-        pending.assignments = plan.assignments
-        pending.restoredAt = Date()
-        store.pending[key] = pending
+        NotificationCenter.default.post(name: Self.restoreWillBegin, object: nil)
+        let moved = await execute(plan.operations)
         integrateMoves(plan.moves.filter { moved.contains($0.key) })
+
         // Restored: every attached display's desktops are whatever they have now.
         store.pending.removeValue(forKey: key)
-        let settled = LiveState.capture()
-        for displayKey in settled.displays.keys where store.pending[displayKey] == nil {
-            if let record = settled.record(for: displayKey) {
+        let identities = SpaceTopology.shared.displays()
+        for display in SpaceTopology.shared.spaces().displays {
+            if let record = DisplaySpacesRecord(display, identities: identities, sessionToken: sessionToken), store.pending[record.identity.key] == nil {
                 store.note(record)
             }
         }
         store.save()
     }
 
-    /// Debug aid: run the reconnect pass again for an attached display with a
-    /// pending restore. A correct restore makes this a no-op.
+    /// Restores every attached display that still has a pending restore
+    /// (one that returned while DockDoor was not running, or the debug button).
     func restoreNow() async {
-        let attached = Set(DisplayIdentity.identities(for: DisplayIdentity.onlineProbes()).values.map(\.key))
+        let attached = SpaceTopology.shared.displays().attachedKeys
         for key in store.pending.keys.sorted() where attached.contains(key) {
             await restore(displayKey: key)
         }
@@ -306,23 +324,19 @@ final class DisplayLayoutMemory {
             return
         }
         guard let position = AXValue.from(point: frame.origin), let size = AXValue.from(size: frame.size) else { return }
-        // Position twice: apps clamp the first move to the old display's bounds
-        // until the size fits, then accept the final position.
-        try? element.setAttribute(kAXPositionAttribute, position)
-        try? element.setAttribute(kAXSizeAttribute, size)
-        try? element.setAttribute(kAXPositionAttribute, position)
+        // Off the main actor: an unresponsive app holds each set for the AX
+        // timeout. Position twice: apps clamp the first move to the old
+        // display's bounds until the size fits, then accept the final position.
+        await Task.detached(priority: .userInitiated) {
+            try? element.setAttribute(kAXPositionAttribute, position)
+            try? element.setAttribute(kAXSizeAttribute, size)
+            try? element.setAttribute(kAXPositionAttribute, position)
+        }.value
     }
 
     private func currentFrame(of windowID: CGWindowID) -> CGRect? {
-        guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: AnyObject]],
-              let bounds = list.first?[kCGWindowBounds as String] as? [String: AnyObject]
-        else { return nil }
-        return CGRect(
-            x: (bounds["X"] as? NSNumber)?.doubleValue ?? 0,
-            y: (bounds["Y"] as? NSNumber)?.doubleValue ?? 0,
-            width: (bounds["Width"] as? NSNumber)?.doubleValue ?? 0,
-            height: (bounds["Height"] as? NSNumber)?.doubleValue ?? 0
-        )
+        guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: AnyObject]] else { return nil }
+        return CGRect(cgWindowBounds: list.first?[kCGWindowBounds as String])
     }
 
     private func axElement(for windowID: CGWindowID) async -> AXUIElement? {
@@ -357,21 +371,15 @@ final class DisplayLayoutMemory {
 
     // MARK: - Probes
 
-    private static func currentSignature() -> DisplayChangeCoalescer.Signature {
-        let identities = DisplayIdentity.identities(for: DisplayIdentity.onlineProbes())
-        return DisplayChangeCoalescer.Signature(
-            keys: Set(identities.values.map(\.key)),
-            separateSpaces: NSScreen.screensHaveSeparateSpaces
-        )
-    }
-
     /// True while the window server is mid-transition: a display animating
     /// a space change, Mission Control up, or Accessibility not yet granted.
     private static func isBusy() -> Bool {
         guard AXIsProcessTrusted() else { return true }
         if WindowSpaces.isMissionControlActive() { return true }
+        // Note: SLSManagedDisplayIsAnimating was observed false during both
+        // gesture and focus-driven switches on macOS 26; kept as a cheap guard.
         let cid = CGSMainConnectionID()
-        return WindowSpaces.displaySpacesSnapshot().contains { CGSManagedDisplayIsAnimating(cid, $0.identifier) }
+        return SpaceTopology.shared.spaces().displays.contains { CGSManagedDisplayIsAnimating(cid, $0.identifier) }
     }
 
     // MARK: - Diagnostics

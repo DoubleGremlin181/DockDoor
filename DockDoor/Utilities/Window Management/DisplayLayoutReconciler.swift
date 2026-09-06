@@ -32,9 +32,12 @@ enum DisplayLayoutReconciler {
     // MARK: - Disconnect
 
     /// Works out where each remembered desktop of the removed display went.
-    /// macOS keeps most desktops intact (same space ID) on the host and folds
-    /// the rest into the host's current desktop; a folded group is pulled
-    /// apart onto a free empty desktop when `useEmptyDesktops` allows it.
+    /// Observed on macOS 26: desktops are moved intact (same space ID) to the
+    /// host except the display's first, which is folded into the host's
+    /// current desktop; a folded group is pulled apart onto a free empty
+    /// desktop when `useEmptyDesktops` allows it. Call with a live state
+    /// captured after any previous removal's moves, so two displays leaving
+    /// at once do not pick the same empty desktop.
     static func planDisconnect(
         record: DisplaySpacesRecord,
         learned: [CGWindowID: Set<CGSSpaceID>],
@@ -145,10 +148,7 @@ enum DisplayLayoutReconciler {
         var assignments: [String: String] = [:]
         var taken: Set<String> = []
         for space in remembered {
-            if let prior = pending.assignments[space.uuid], targetSpaces.contains(where: { $0.uuid == prior }), !taken.contains(prior) {
-                assignments[space.uuid] = prior
-                taken.insert(prior)
-            } else if let same = targetSpaces.first(where: { ($0.uuid == space.uuid || $0.id == space.id) && !taken.contains($0.uuid) }) {
+            if let same = targetSpaces.first(where: { ($0.uuid == space.uuid || $0.id == space.id) && !taken.contains($0.uuid) }) {
                 assignments[space.uuid] = same.uuid
                 taken.insert(same.uuid)
             }

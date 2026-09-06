@@ -21,12 +21,13 @@ struct DisplayChangeCoalescer {
     }
 
     enum Effect: Equatable {
-        /// Snapshot the live state now — a display is about to disappear
+        /// Copy the memory (learned map, space table, frames) before the
+        /// switcher's relearn prunes desktops that just died
         case capturePreChange
         case armTimer(TimeInterval)
         case cancelTimer
         case act(previous: Signature, current: Signature)
-        /// Back to idle: rolling snapshots may resume
+        /// Back to idle: the space table may be refreshed again
         case becameIdle
     }
 
@@ -62,31 +63,32 @@ struct DisplayChangeCoalescer {
         switch (phase, event) {
         case (.asleep, .didWake):
             phase = .coalescing(since: now)
-            hasPreChange = false
             return [.armTimer(Self.wakeSettle)]
-        case (.asleep, _):
+        case (.asleep, .beginConfiguration), (.asleep, .postConfiguration), (.asleep, .screenParametersChanged):
+            // Displays leave while asleep; the switcher's relearn would prune
+            // their desktops from the learned map long before wake settles,
+            // so copy the memory at the first sign of change.
+            return capturePreChangeOnce()
+        case (.asleep, .timer), (.asleep, .willSleep):
             return []
         case (.acting, .willSleep):
             sleepDuringAction = true
             return []
         case (_, .willSleep):
             phase = .asleep
-            hasPreChange = false
             return [.cancelTimer]
         case (.acting, .beginConfiguration), (.acting, .postConfiguration), (.acting, .screenParametersChanged), (.acting, .didWake):
             changeDuringAction = true
             return []
         case (.acting, .timer):
             return []
-        case (.idle, .beginConfiguration), (.cooldown, .beginConfiguration):
+        case (.idle, .beginConfiguration), (.idle, .postConfiguration), (.idle, .screenParametersChanged), (.idle, .didWake),
+             (.cooldown, .beginConfiguration), (.cooldown, .postConfiguration), (.cooldown, .screenParametersChanged), (.cooldown, .didWake):
+            // Whatever the first event of a burst is: on a real unplug the
+            // window server has already migrated Spaces by the time the
+            // "begin" callback fires, so nothing is gained by waiting for it.
             phase = .coalescing(since: now)
-            hasPreChange = true
-            return [.capturePreChange, .armTimer(Self.debounce)]
-        case (.idle, .postConfiguration), (.idle, .screenParametersChanged), (.idle, .didWake),
-             (.cooldown, .postConfiguration), (.cooldown, .screenParametersChanged), (.cooldown, .didWake):
-            phase = .coalescing(since: now)
-            hasPreChange = false
-            return [.armTimer(Self.debounce)]
+            return capturePreChangeOnce() + [.armTimer(Self.debounce)]
         case (.idle, .timer):
             return []
         case (.cooldown, .timer):
@@ -97,13 +99,7 @@ struct DisplayChangeCoalescer {
             if now.timeIntervalSince(since) >= Self.hardCap {
                 return evaluate(now: now, signature: signature, isBusy: isBusy)
             }
-            var effects: [Effect] = []
-            if event == .beginConfiguration, !hasPreChange {
-                hasPreChange = true
-                effects.append(.capturePreChange)
-            }
-            effects.append(.armTimer(Self.debounce))
-            return effects
+            return capturePreChangeOnce() + [.armTimer(Self.debounce)]
         case (.coalescing, .timer):
             return evaluate(now: now, signature: signature, isBusy: isBusy)
         case (.waitingForQuiescence, .beginConfiguration), (.waitingForQuiescence, .postConfiguration),
@@ -117,6 +113,12 @@ struct DisplayChangeCoalescer {
             phase = .waitingForQuiescence(attempt: attempt + 1)
             return [.armTimer(Self.quiescenceLadder[attempt])]
         }
+    }
+
+    private mutating func capturePreChangeOnce() -> [Effect] {
+        guard !hasPreChange else { return [] }
+        hasPreChange = true
+        return [.capturePreChange]
     }
 
     /// The owner finished the action started by `.act`.

@@ -19,6 +19,9 @@ struct DisplaySpacesRecord: Codable, Hashable {
     let identity: DisplayIdentity
     let spaces: [SpaceRecord]
     let updatedAt: Date
+    /// Login session whose window server minted `spaces[].id` (and the
+    /// learned-map entries that reference them)
+    let sessionToken: String
 
     /// Same desktops in the same order (timestamps and the current-desktop
     /// marker ignored, so plain space switches never rewrite the store)
@@ -50,15 +53,12 @@ struct PendingRestore: Codable, Hashable {
     /// Window → frame relative to the removed display's bounds, as last seen
     /// there by the Space Switcher (CG coordinates, points)
     var frames: [CGWindowID: CGRect] = [:]
-    /// Remembered desktop uuid → target desktop uuid chosen at the first restore pass
-    var assignments: [String: String] = [:]
-    var restoredAt: Date?
 }
 
 struct DisplayLayoutStore: Codable {
     static let maxDisplays = 16
 
-    var version = 2
+    var version = 3
     var displays: [String: DisplaySpacesRecord] = [:]
     var pending: [String: PendingRestore] = [:]
 
@@ -177,38 +177,51 @@ struct LiveState {
         displays.values.first { $0.isMain }?.identity.key
     }
 
-    func record(for displayKey: String, at date: Date = Date()) -> DisplaySpacesRecord? {
+    func record(for displayKey: String, sessionToken: String, at date: Date = Date()) -> DisplaySpacesRecord? {
         guard let display = displays[displayKey] else { return nil }
         let spaces = spaces(on: displayKey).enumerated().map { index, space in
             SpaceRecord(uuid: space.uuid, id: space.id, index: index, isFullscreen: space.isFullscreen, wasCurrent: space.isCurrent)
         }
-        return DisplaySpacesRecord(identity: display.identity, spaces: spaces, updatedAt: date)
+        return DisplaySpacesRecord(identity: display.identity, spaces: spaces, updatedAt: date, sessionToken: sessionToken)
+    }
+}
+
+extension DisplaySpacesRecord {
+    /// A display's desktops as the Space Switcher just read them.
+    init?(_ display: DisplaySpaces, identities: SpaceTopology.DisplayTable, sessionToken: String, at date: Date = Date()) {
+        guard let identity = identities.identity(forCGSIdentifier: display.identifier) else { return nil }
+        let spaces = display.spaces.enumerated().map { index, space in
+            SpaceRecord(uuid: space.uuid, id: space.id, index: index, isFullscreen: space.isFullscreen, wasCurrent: space.isCurrent)
+        }
+        self.init(identity: identity, spaces: spaces, updatedAt: date, sessionToken: sessionToken)
     }
 }
 
 extension LiveState {
     /// The Space Switcher's own model (fresh CGS membership, frames, sticky
-    /// attribution) reshaped for the reconciler.
+    /// attribution), every window included, reshaped for the reconciler.
     @MainActor
     static func capture() -> LiveState {
-        let model = SpaceSwitcherEngine.buildModel()
-        let identities = DisplayIdentity.identities(for: DisplayIdentity.onlineProbes())
-        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        LiveState(
+            model: SpaceSwitcherEngine.buildModel(includeAll: true),
+            displays: SpaceTopology.shared.displays(),
+            primaryHeight: NSScreen.screens.first?.frame.maxY ?? 0
+        )
+    }
 
+    init(model: SpaceSwitcherEngine.Model, displays table: SpaceTopology.DisplayTable, primaryHeight: CGFloat) {
+        let mainScreen = NSScreen.screens.first
         var displays: [String: LiveDisplay] = [:]
         var keyByIdentifier: [String: String] = [:]
         for display in model.displays {
-            guard let screen = display.screen,
-                  let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
-                  let identity = identities[number.uint32Value]
-            else { continue }
+            guard let screen = display.screen, let displayID = screen.displayID, let identity = table.identities[displayID] else { continue }
             let visible = screen.visibleFrame
             displays[identity.key] = LiveDisplay(
                 identity: identity,
-                displayID: number.uint32Value,
-                bounds: CGDisplayBounds(number.uint32Value),
+                displayID: displayID,
+                bounds: CGDisplayBounds(displayID),
                 visibleBounds: CGRect(x: visible.minX, y: primaryHeight - visible.maxY, width: visible.width, height: visible.height),
-                isMain: screen == NSScreen.screens.first
+                isMain: screen == mainScreen
             )
             keyByIdentifier[display.identifier] = identity.key
         }
@@ -233,6 +246,6 @@ extension LiveState {
                 ))
             }
         }
-        return LiveState(displays: displays, spaces: spaces, windows: windows)
+        self.init(displays: displays, spaces: spaces, windows: windows)
     }
 }

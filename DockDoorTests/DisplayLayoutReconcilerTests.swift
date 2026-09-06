@@ -42,7 +42,7 @@ struct DisplayLayoutReconcilerTests {
             SpaceRecord(uuid: "A", id: 9, index: 0, isFullscreen: false, wasCurrent: false),
             SpaceRecord(uuid: "B", id: 10, index: 1, isFullscreen: false, wasCurrent: false),
             SpaceRecord(uuid: "C", id: 7, index: 2, isFullscreen: false, wasCurrent: true),
-        ], updatedAt: Date())
+        ], updatedAt: Date(), sessionToken: token)
     }
 
     /// The Space Switcher's learned map before the unplug.
@@ -106,10 +106,42 @@ struct DisplayLayoutReconcilerTests {
         #expect(disconnect(after: live).pending.migrations == ["B": "B"])
     }
 
+    @Test func secondRemovalSeesTheFirstRemovalsUnfold() {
+        // Two displays left at once; each is planned against the state after the previous plan's moves.
+        let second = DisplaySpacesRecord(identity: identity("LG2", size: lgBounds.size), spaces: [
+            SpaceRecord(uuid: "X", id: 40, index: 0, isFullscreen: false, wasCurrent: true),
+        ], updatedAt: Date(), sessionToken: token)
+        let learnedBoth: [CGWindowID: Set<CGSSpaceID>] = [1: [9], 2: [9], 8: [40]]
+        let afterBoth = state(displays: [bi], spaces: [
+            space(5, uuid: "p1", on: "BI", windows: [1, 2, 8, 50], current: true),
+            space(19, uuid: "p2", on: "BI", windows: []),
+            space(21, uuid: "p3", on: "BI", windows: []),
+        ], windows: [window(1), window(2), window(8), window(50)])
+        let first = R.planDisconnect(record: lgRecord, learned: learnedBoth, preexistingSpaceUUIDs: ["p1", "p2", "p3"], after: afterBoth, useEmptyDesktops: true, sessionToken: token)
+        #expect(first.operations == [.moveWindows([1, 2], to: 19)])
+        // State after the first plan ran:
+        let afterFirst = state(displays: [bi], spaces: [
+            space(5, uuid: "p1", on: "BI", windows: [8, 50], current: true),
+            space(19, uuid: "p2", on: "BI", windows: [1, 2]),
+            space(21, uuid: "p3", on: "BI", windows: []),
+        ], windows: [window(1), window(2), window(8), window(50)])
+        let secondPlan = R.planDisconnect(record: second, learned: learnedBoth, preexistingSpaceUUIDs: ["p1", "p2", "p3"], after: afterFirst, useEmptyDesktops: true, sessionToken: token)
+        #expect(secondPlan.operations == [.moveWindows([8], to: 21)], "picks the desktop the first plan left free")
+    }
+
+    @Test func crossSessionFoldedDesktopMovesNothingByID() {
+        let live = state(displays: [bi, lg], spaces: [
+            space(5, uuid: "p1", on: "BI", windows: [1, 2, 50], current: true),
+            space(30, uuid: "n1", on: "LG", windows: [], current: true),
+        ], windows: allWindows.map { window($0) })
+        let plan = R.planReconnect(pending: pending, live: live, sessionToken: "other")
+        #expect(plan.moves.isEmpty)
+    }
+
     @Test func fullscreenDesktopsAreIgnored() {
         var spaces = lgRecord.spaces
         spaces.append(SpaceRecord(uuid: "F", id: 12, index: 3, isFullscreen: true, wasCurrent: false))
-        let record = DisplaySpacesRecord(identity: lgRecord.identity, spaces: spaces, updatedAt: Date())
+        let record = DisplaySpacesRecord(identity: lgRecord.identity, spaces: spaces, updatedAt: Date(), sessionToken: token)
         let live = state(displays: [bi], spaces: [
             space(5, uuid: "p1", on: "BI", windows: [50], current: true),
             space(12, uuid: "F", on: "BI", windows: [7], fullscreen: true),
@@ -153,8 +185,7 @@ struct DisplayLayoutReconcilerTests {
 
     @Test func replugIsIdempotent() {
         let first = R.planReconnect(pending: pending, live: afterReplug, sessionToken: token)
-        var settled = pending
-        settled.assignments = first.assignments
+        let settled = pending
         let done = state(displays: [bi, lg], spaces: [
             space(5, uuid: "p1", on: "BI", windows: [50], current: true),
             space(19, uuid: "p2", on: "BI", windows: []),

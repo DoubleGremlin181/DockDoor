@@ -28,7 +28,7 @@ struct DisplayChangeCoalescerTests {
 
     @Test func flapWithoutNetChangeIsNoOp() {
         var c = C(initial: two)
-        _ = c.handle(.beginConfiguration, now: at(0), signature: { two }, isBusy: { false })
+        #expect(c.handle(.beginConfiguration, now: at(0), signature: { two }, isBusy: { false }) == [.capturePreChange, .armTimer(C.debounce)])
         _ = c.handle(.postConfiguration, now: at(1), signature: { one }, isBusy: { false })
         _ = c.handle(.postConfiguration, now: at(2), signature: { two }, isBusy: { false })
         #expect(c.handle(.timer, now: at(4.5), signature: { two }, isBusy: { false }) == [.armTimer(C.cooldown)])
@@ -66,11 +66,26 @@ struct DisplayChangeCoalescerTests {
         var c = C(initial: two)
         #expect(c.handle(.willSleep, now: at(0), signature: { two }, isBusy: { false }) == [.cancelTimer])
         #expect(c.phase == .asleep)
-        #expect(c.handle(.beginConfiguration, now: at(1), signature: { two }, isBusy: { false }) == [])
+        // A display leaving while asleep: copy the memory at the first sign, once, and stay asleep.
+        #expect(c.handle(.beginConfiguration, now: at(1), signature: { two }, isBusy: { false }) == [.capturePreChange])
         #expect(c.handle(.postConfiguration, now: at(2), signature: { one }, isBusy: { false }) == [])
+        #expect(c.phase == .asleep)
         #expect(c.handle(.didWake, now: at(60), signature: { one }, isBusy: { false }) == [.armTimer(C.wakeSettle)])
-        #expect(!c.hasPreChange, "no pre-change snapshot during sleep: the rolling snapshot is the reference")
+        #expect(c.hasPreChange, "the copy taken during sleep survives to the wake evaluation")
         #expect(c.handle(.timer, now: at(65), signature: { one }, isBusy: { false }) == [.act(previous: two, current: one)])
+    }
+
+    @Test func quietSleepCapturesNothing() {
+        var c = C(initial: two)
+        _ = c.handle(.willSleep, now: at(0), signature: { two }, isBusy: { false })
+        #expect(c.handle(.didWake, now: at(60), signature: { two }, isBusy: { false }) == [.armTimer(C.wakeSettle)])
+        #expect(!c.hasPreChange)
+    }
+
+    @Test func firstEventOfABurstCapturesWhateverItIs() {
+        var c = C(initial: two)
+        #expect(c.handle(.postConfiguration, now: at(0), signature: { one }, isBusy: { false }) == [.capturePreChange, .armTimer(C.debounce)])
+        #expect(c.handle(.beginConfiguration, now: at(0.1), signature: { one }, isBusy: { false }) == [.armTimer(C.debounce)], "only once per burst")
     }
 
     @Test func wakeWithoutChangeIsQuiet() {
@@ -112,7 +127,7 @@ struct DisplayChangeCoalescerTests {
     @Test func separateSpacesToggleCountsAsChange() {
         var c = C(initial: two)
         let merged = C.Signature(keys: ["BI", "LG"], separateSpaces: false)
-        _ = c.handle(.screenParametersChanged, now: at(0), signature: { two }, isBusy: { false })
+        #expect(c.handle(.screenParametersChanged, now: at(0), signature: { two }, isBusy: { false }) == [.capturePreChange, .armTimer(C.debounce)])
         #expect(c.handle(.timer, now: at(3), signature: { merged }, isBusy: { false }) == [.act(previous: two, current: merged)])
     }
 }

@@ -1,14 +1,13 @@
 import AppKit
 
-/// Feeds CoreGraphics reconfiguration callbacks, AppKit screen-parameter
-/// notifications and sleep/wake into a `DisplayChangeCoalescer`, and runs
-/// the effects it returns on the main thread.
+/// Feeds `SpaceTopology`'s display, screen-parameter and sleep/wake events
+/// into a `DisplayChangeCoalescer` and runs the effects it returns on the
+/// main thread.
 @MainActor
 final class DisplayReconfigurationObserver {
     struct Change {
         let removed: Set<String>
         let added: Set<String>
-        let previous: DisplayChangeCoalescer.Signature
         let current: DisplayChangeCoalescer.Signature
     }
 
@@ -21,59 +20,53 @@ final class DisplayReconfigurationObserver {
 
     private(set) var coalescer: DisplayChangeCoalescer
     private var timer: Timer?
-    private var observers: [NSObjectProtocol] = []
-    private var registered = false
+    private var subscription: UUID?
 
     init(signatureProvider: @escaping () -> DisplayChangeCoalescer.Signature) {
         self.signatureProvider = signatureProvider
         coalescer = DisplayChangeCoalescer(initial: signatureProvider())
     }
 
+    var isRunning: Bool { subscription != nil }
+
     func start() {
-        guard !registered else { return }
-        registered = true
+        guard subscription == nil else { return }
         coalescer = DisplayChangeCoalescer(initial: signatureProvider())
-
-        CGDisplayRegisterReconfigurationCallback(Self.reconfigurationCallback, Unmanaged.passUnretained(self).toOpaque())
-
-        observers.append(NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handle(.screenParametersChanged) }
-        })
-        let workspace = NSWorkspace.shared.notificationCenter
-        observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handle(.willSleep) }
-        })
-        observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.handle(.didWake) }
-        })
+        subscription = SpaceTopology.shared.subscribe { [weak self] event in
+            guard let self else { return }
+            let mapped: DisplayChangeCoalescer.Event? = switch event {
+            case .displaysWillChange: .beginConfiguration
+            case .displaysChanged: .postConfiguration
+            case .screenParametersChanged: .screenParametersChanged
+            case .willSleep: .willSleep
+            case .didWake: .didWake
+            case .activeSpaceChanged: nil
+            }
+            if let mapped {
+                MainActor.assumeIsolated { self.handle(mapped) }
+            }
+        }
     }
 
     func stop() {
-        guard registered else { return }
-        registered = false
-        CGDisplayRemoveReconfigurationCallback(Self.reconfigurationCallback, Unmanaged.passUnretained(self).toOpaque())
-        for observer in observers {
-            NotificationCenter.default.removeObserver(observer)
-            NSWorkspace.shared.notificationCenter.removeObserver(observer)
-        }
-        observers.removeAll()
+        guard let subscription else { return }
+        SpaceTopology.shared.unsubscribe(subscription)
+        self.subscription = nil
         timer?.invalidate()
         timer = nil
     }
 
-    deinit {
-        MainActor.assumeIsolated { stop() }
-    }
+    // No deinit cleanup: the owner must stop() before releasing (the
+    // subscription would otherwise outlive the observer, harmlessly weak).
 
     /// The action started by `onAct` completed.
     func finishAction() {
-        let effects = coalescer.actionFinished(now: Date(), signature: signatureProvider())
-        run(effects)
+        guard isRunning else { return }
+        run(coalescer.actionFinished(now: Date(), signature: signatureProvider()))
     }
 
     func handle(_ event: DisplayChangeCoalescer.Event) {
+        guard isRunning else { return }
         let effects = coalescer.handle(event, now: Date(), signature: signatureProvider, isBusy: busyProvider)
         DebugLogger.log("DisplayLayoutMemory", details: "event \(event) → \(coalescer.phase) \(effects)")
         run(effects)
@@ -86,33 +79,21 @@ final class DisplayReconfigurationObserver {
                 onCapturePreChange()
             case let .armTimer(delay):
                 timer?.invalidate()
-                timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                // Common modes: a menu or window drag right after plugging in
+                // must not stall the settle timer.
+                let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
                     MainActor.assumeIsolated { self?.handle(.timer) }
                 }
+                RunLoop.main.add(timer, forMode: .common)
+                self.timer = timer
             case .cancelTimer:
                 timer?.invalidate()
                 timer = nil
             case let .act(previous, current):
-                onAct(Change(
-                    removed: previous.keys.subtracting(current.keys),
-                    added: current.keys.subtracting(previous.keys),
-                    previous: previous,
-                    current: current
-                ))
+                onAct(Change(removed: previous.keys.subtracting(current.keys), added: current.keys.subtracting(previous.keys), current: current))
             case .becameIdle:
                 onIdle()
             }
-        }
-    }
-
-    private static let reconfigurationCallback: CGDisplayReconfigurationCallBack = { _, flags, userInfo in
-        guard let userInfo else { return }
-        let observer = Unmanaged<DisplayReconfigurationObserver>.fromOpaque(userInfo).takeUnretainedValue()
-        let event: DisplayChangeCoalescer.Event = flags.contains(.beginConfigurationFlag) ? .beginConfiguration : .postConfiguration
-        if Thread.isMainThread {
-            MainActor.assumeIsolated { observer.handle(event) }
-        } else {
-            DispatchQueue.main.async { observer.handle(event) }
         }
     }
 }
