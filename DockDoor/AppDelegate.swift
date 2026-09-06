@@ -88,6 +88,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 dockLocker = DockLocker()
             }
 
+            // Self-gated on its setting; construct it so the Defaults observer is live.
+            _ = DisplayLayoutMemory.shared
+
             if updater.automaticallyChecksForUpdates {
                 print("AppDelegate: Automatic updates enabled, checking in background.")
                 updater.checkForUpdatesInBackground()
@@ -130,6 +133,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         wakeRecoveryTask?.cancel()
         WindowUtil.saveWindowOrderFromCache()
+        DisplayLayoutMemory.shared.flush()
         URLCache.shared.removeAllCachedResponses()
     }
 

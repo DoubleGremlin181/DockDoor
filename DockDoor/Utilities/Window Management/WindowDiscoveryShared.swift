@@ -584,6 +584,16 @@ enum WindowSpaces {
 
     @discardableResult
     static func move(windowID: CGWindowID, toManagedSpace targetSpaceID: CGSSpaceID) -> Bool {
+        if windowID.cgsSpaces().contains(targetSpaceID) {
+            return true
+        }
+        return move(windowIDs: [windowID], toManagedSpace: targetSpaceID)
+    }
+
+    /// Batched move; the target must be a managed space on some display.
+    @discardableResult
+    static func move(windowIDs: [CGWindowID], toManagedSpace targetSpaceID: CGSSpaceID) -> Bool {
+        guard !windowIDs.isEmpty else { return true }
         let displays = managedDisplays()
         guard displays.contains(where: { display in
             display.currentSpaceID == targetSpaceID || display.spaceIDs.contains(targetSpaceID)
@@ -591,12 +601,7 @@ enum WindowSpaces {
             DebugLogger.log("WindowSpaces.move", details: "Target Space \(targetSpaceID) not found")
             return false
         }
-
-        if windowID.cgsSpaces().contains(targetSpaceID) {
-            return true
-        }
-
-        return SLSMoveWindowsToManagedSpace([windowID], targetSpaceID)
+        return SLSMoveWindowsToManagedSpace(windowIDs, targetSpaceID)
     }
 
     /// True while Mission Control (or App Exposé) is showing: the Dock then owns

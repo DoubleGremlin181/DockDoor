@@ -11,6 +11,10 @@
 		04BD318C42EC4FC1970218EB /* KeybindConflictsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D842FBCDEA749F39D3C3283 /* KeybindConflictsTests.swift */; };
 		431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */; };
 		FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */; };
+		7A7BE86DB7144B069C3A7B35 /* DisplayLayoutStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA2F921F83941C5B79ADA9D /* DisplayLayoutStoreTests.swift */; };
+		9A43E47AE51445C2AF8921E8 /* DisplayChangeCoalescerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0553E5EDE1D74B24A010AD79 /* DisplayChangeCoalescerTests.swift */; };
+		D110CF9BE55E47D19C19C187 /* DisplayLayoutReconcilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22C8F0CFA4C540E7860B6DE0 /* DisplayLayoutReconcilerTests.swift */; };
+		4055877C941540F6B3674ACB /* DisplayIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F15F19FAB3347F1A7C6C911 /* DisplayIdentityTests.swift */; };
 		894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */; };
 		1829036ACADB407883025CE4 /* SpaceSwitcherKeybindSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A982912493AD4E5A8CBF404B /* SpaceSwitcherKeybindSection.swift */; };
 		83A8FD13D33D4A2EBD7424BC /* KeybindConflicts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */; };
@@ -109,6 +113,12 @@
 		BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */; };
 		3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */; };
 		E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */; };
+		78F99BF445634FFFA2D5F887 /* DisplayLayoutMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F69CBD89DFC43AA805A209E /* DisplayLayoutMemory.swift */; };
+		690E007A395241668CB6614C /* DisplayLayoutReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A8D7DAA1B284FF4AFEF4414 /* DisplayLayoutReconciler.swift */; };
+		7E99DA5A065A4E42A4652E0B /* DisplayReconfigurationObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C70D9E4B91E45B389950651 /* DisplayReconfigurationObserver.swift */; };
+		B89FBDAC42F04D76B2D82996 /* DisplayChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B4A48A418B431498ADE3BA /* DisplayChangeCoalescer.swift */; };
+		C1662D4EB8364D1790A62B26 /* DisplayLayoutModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9678120A6964773A3E836DE /* DisplayLayoutModels.swift */; };
+		2434810E709E4C37AAF09A11 /* DisplayIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07879E989D24367926A4C80 /* DisplayIdentity.swift */; };
 		68DC9AFCF936449CAB4D17F3 /* SpaceSwitchingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42BF162A1E044DC8AB9D347 /* SpaceSwitchingCoordinator.swift */; };
 		4F2F74E019764064984AC616 /* SpaceSwitcherPanelCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2D6135D44C2488E9C16F67E /* SpaceSwitcherPanelCoordinator.swift */; };
 		1A8FABBDC6F74C7ABA6B9B01 /* SpaceSwitcherState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5728EDAB9FC248F792DE1474 /* SpaceSwitcherState.swift */; };
@@ -258,6 +268,10 @@
 		6D842FBCDEA749F39D3C3283 /* KeybindConflictsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeybindConflictsTests.swift; sourceTree = "<group>"; };
 		45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitcherScreenPlacementTests.swift; sourceTree = "<group>"; };
 		73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngineTests.swift; sourceTree = "<group>"; };
+		1BA2F921F83941C5B79ADA9D /* DisplayLayoutStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutStoreTests.swift; sourceTree = "<group>"; };
+		0553E5EDE1D74B24A010AD79 /* DisplayChangeCoalescerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayChangeCoalescerTests.swift; sourceTree = "<group>"; };
+		22C8F0CFA4C540E7860B6DE0 /* DisplayLayoutReconcilerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutReconcilerTests.swift; sourceTree = "<group>"; };
+		3F15F19FAB3347F1A7C6C911 /* DisplayIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayIdentityTests.swift; sourceTree = "<group>"; };
 		3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherDisplayOrderTests.swift; sourceTree = "<group>"; };
 		A982912493AD4E5A8CBF404B /* SpaceSwitcherKeybindSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherKeybindSection.swift; sourceTree = "<group>"; };
 		71F57F3969514042BEAFB4EA /* KeybindConflicts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeybindConflicts.swift; sourceTree = "<group>"; };
@@ -358,6 +372,12 @@
 		BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDiscoveryShared.swift; sourceTree = "<group>"; };
 		E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceInfo.swift; sourceTree = "<group>"; };
 		686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherEngine.swift; sourceTree = "<group>"; };
+		4F69CBD89DFC43AA805A209E /* DisplayLayoutMemory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutMemory.swift; sourceTree = "<group>"; };
+		9A8D7DAA1B284FF4AFEF4414 /* DisplayLayoutReconciler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutReconciler.swift; sourceTree = "<group>"; };
+		9C70D9E4B91E45B389950651 /* DisplayReconfigurationObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayReconfigurationObserver.swift; sourceTree = "<group>"; };
+		F4B4A48A418B431498ADE3BA /* DisplayChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayChangeCoalescer.swift; sourceTree = "<group>"; };
+		D9678120A6964773A3E836DE /* DisplayLayoutModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLayoutModels.swift; sourceTree = "<group>"; };
+		E07879E989D24367926A4C80 /* DisplayIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayIdentity.swift; sourceTree = "<group>"; };
 		A42BF162A1E044DC8AB9D347 /* SpaceSwitchingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitchingCoordinator.swift; sourceTree = "<group>"; };
 		B2D6135D44C2488E9C16F67E /* SpaceSwitcherPanelCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherPanelCoordinator.swift; sourceTree = "<group>"; };
 		5728EDAB9FC248F792DE1474 /* SpaceSwitcherState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceSwitcherState.swift; sourceTree = "<group>"; };
@@ -652,6 +672,10 @@
 				6D842FBCDEA749F39D3C3283 /* KeybindConflictsTests.swift */,
 				45BA9095C4EF4608945A495C /* SwitcherScreenPlacementTests.swift */,
 				73F805078A2B4F3C97A519FD /* SpaceSwitcherEngineTests.swift */,
+				1BA2F921F83941C5B79ADA9D /* DisplayLayoutStoreTests.swift */,
+				0553E5EDE1D74B24A010AD79 /* DisplayChangeCoalescerTests.swift */,
+				22C8F0CFA4C540E7860B6DE0 /* DisplayLayoutReconcilerTests.swift */,
+				3F15F19FAB3347F1A7C6C911 /* DisplayIdentityTests.swift */,
 				3CF38FBC6F414EE5B72081CC /* SpaceSwitcherDisplayOrderTests.swift */,
 				D00D4B366E3CF5338182E065 /* NativeTabGroupingTests.swift */,
 			);
@@ -962,6 +986,12 @@
 				BB2106732E830EC5002F87D6 /* WindowDiscoveryShared.swift */,
 				E3FD2ED5B2134236AED3B6D8 /* SpaceInfo.swift */,
 				686C4E24B93A410381E3A74C /* SpaceSwitcherEngine.swift */,
+				4F69CBD89DFC43AA805A209E /* DisplayLayoutMemory.swift */,
+				9A8D7DAA1B284FF4AFEF4414 /* DisplayLayoutReconciler.swift */,
+				9C70D9E4B91E45B389950651 /* DisplayReconfigurationObserver.swift */,
+				F4B4A48A418B431498ADE3BA /* DisplayChangeCoalescer.swift */,
+				D9678120A6964773A3E836DE /* DisplayLayoutModels.swift */,
+				E07879E989D24367926A4C80 /* DisplayIdentity.swift */,
 				BB49747C2E81CE5100308326 /* WindowSeeder.swift */,
 				BB49747D2F01AB0100308326 /* WindowOrderPersistence.swift */,
 				BBB023AC2EDCCB9100317CF4 /* WindowInfo.swift */,
@@ -1166,6 +1196,10 @@
 				04BD318C42EC4FC1970218EB /* KeybindConflictsTests.swift in Sources */,
 				431E7F1C0DAE44E4B1FBB3BD /* SwitcherScreenPlacementTests.swift in Sources */,
 				FF8D2F2CF97E47DBABC9F985 /* SpaceSwitcherEngineTests.swift in Sources */,
+				7A7BE86DB7144B069C3A7B35 /* DisplayLayoutStoreTests.swift in Sources */,
+				9A43E47AE51445C2AF8921E8 /* DisplayChangeCoalescerTests.swift in Sources */,
+				D110CF9BE55E47D19C19C187 /* DisplayLayoutReconcilerTests.swift in Sources */,
+				4055877C941540F6B3674ACB /* DisplayIdentityTests.swift in Sources */,
 				894373BFA65E48D287C0A2CB /* SpaceSwitcherDisplayOrderTests.swift in Sources */,
 				555110B7F7B99C7BD510DBC7 /* NativeTabGroupingTests.swift in Sources */,
 			);
@@ -1273,6 +1307,12 @@
 				BB2106742E830EC5002F87D6 /* WindowDiscoveryShared.swift in Sources */,
 				3B5AEDDA4DA14C1395DD1842 /* SpaceInfo.swift in Sources */,
 				E6973BCE5EC94AEF94A2EB8A /* SpaceSwitcherEngine.swift in Sources */,
+				78F99BF445634FFFA2D5F887 /* DisplayLayoutMemory.swift in Sources */,
+				690E007A395241668CB6614C /* DisplayLayoutReconciler.swift in Sources */,
+				7E99DA5A065A4E42A4652E0B /* DisplayReconfigurationObserver.swift in Sources */,
+				B89FBDAC42F04D76B2D82996 /* DisplayChangeCoalescer.swift in Sources */,
+				C1662D4EB8364D1790A62B26 /* DisplayLayoutModels.swift in Sources */,
+				2434810E709E4C37AAF09A11 /* DisplayIdentity.swift in Sources */,
 				68DC9AFCF936449CAB4D17F3 /* SpaceSwitchingCoordinator.swift in Sources */,
 				4F2F74E019764064984AC616 /* SpaceSwitcherPanelCoordinator.swift in Sources */,
 				1A8FABBDC6F74C7ABA6B9B01 /* SpaceSwitcherState.swift in Sources */,

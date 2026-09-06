@@ -19,6 +19,7 @@ final class SpaceSwitchingCoordinator {
 
     private var learningObserver: NSObjectProtocol?
     private var screenChangeObserver: NSObjectProtocol?
+    private var restoreObserver: NSObjectProtocol?
 
     init() {
         // The one space-change observer, serving both lifecycles:
@@ -53,6 +54,20 @@ final class SpaceSwitchingCoordinator {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.handleScreenParametersChanged()
+            }
+        }
+
+        // Display layout memory is about to move windows between spaces: an
+        // open session's buckets would be wrong, and its recentMoves stale.
+        restoreObserver = NotificationCenter.default.addObserver(
+            forName: DisplayLayoutMemory.restoreWillBegin,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, isSessionActive else { return }
+                DebugLogger.log("SpaceSwitcher", details: "display layout restore starting; cancelling session")
+                cancel()
             }
         }
     }

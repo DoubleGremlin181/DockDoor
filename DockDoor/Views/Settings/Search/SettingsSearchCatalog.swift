@@ -645,6 +645,32 @@ enum SettingsSearchCatalog {
             section: String(localized: "Appearance"),
             icon: "ruler"
         ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.rememberDisplayLayouts",
+            title: String(localized: "Remember desktop layouts per display"),
+            description: String(localized: "Uses what the Space Switcher already knows about your windows: when a display is unplugged its desktops are kept apart on the remaining display, and when it comes back its windows return to the desktops it has. Desktops are never created or removed."),
+            keywords: ["display", "monitor", "unplug", "disconnect", "reconnect", "desktop", "layout", "remember", "restore", "dock", "clamshell", "external"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Display memory"),
+            icon: "display.2"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.keepUnpluggedDesktopsSeparate",
+            title: String(localized: "Use empty desktops to keep unplugged desktops apart"),
+            description: String(localized: "If macOS folds two of the unplugged display’s desktops together, the second group of windows is moved onto an empty desktop of the remaining display when one is free."),
+            keywords: ["display", "monitor", "unplug", "merge", "desktop", "empty", "separate"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Display memory"),
+            icon: "rectangle.split.2x1"
+        ),
+        SettingsSearchItem(
+            id: "spaceSwitcher.forgetDisplayLayouts",
+            title: String(localized: "Forget remembered layouts"),
+            keywords: ["display", "layout", "forget", "clear", "reset", "remember"],
+            tab: "SpaceSwitcher",
+            section: String(localized: "Display memory"),
+            icon: "eraser"
+        ),
     ]
 
     // MARK: - Dock Locking

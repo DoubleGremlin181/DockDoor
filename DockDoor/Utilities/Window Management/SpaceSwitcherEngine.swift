@@ -55,11 +55,13 @@ enum SpaceSwitcherEngine {
     @MainActor
     static func learnVisibleWindows() {
         let displays = WindowSpaces.displaySpacesSnapshot()
+        DisplayLayoutMemory.shared.noteSpaces(displays)
         let knownSpaceIDs = Set(displays.flatMap { $0.spaces.map(\.id) })
         guard !knownSpaceIDs.isEmpty,
               let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: AnyObject]]
         else { return }
 
+        var frames: [CGWindowID: CGRect] = [:]
         for entry in list {
             guard (entry[kCGWindowLayer as String] as? NSNumber)?.intValue == 0 else { continue }
             let wid = CGWindowID((entry[kCGWindowNumber as String] as? NSNumber)?.uint32Value ?? 0)
@@ -68,11 +70,39 @@ enum SpaceSwitcherEngine {
                 learnedSpaces[wid] = fresh
                 learnedDirty = true
             }
+            if fresh.count == 1, let bounds = entry[kCGWindowBounds as String] as? [String: AnyObject] {
+                frames[wid] = CGRect(
+                    x: (bounds["X"] as? NSNumber)?.doubleValue ?? 0,
+                    y: (bounds["Y"] as? NSNumber)?.doubleValue ?? 0,
+                    width: (bounds["Width"] as? NSNumber)?.doubleValue ?? 0,
+                    height: (bounds["Height"] as? NSNumber)?.doubleValue ?? 0
+                )
+            }
         }
+        DisplayLayoutMemory.shared.noteFrames(frames)
 
         let pruned = learnedSpaces.filter { !$0.value.intersection(knownSpaceIDs).isEmpty }
         if pruned.count != learnedSpaces.count {
             learnedSpaces = pruned
+            learnedDirty = true
+        }
+        persistLearnedIfNeeded()
+    }
+
+    /// Copy of the learned map for display layout memory.
+    @MainActor
+    static func learnedSnapshot() -> [CGWindowID: Set<CGSSpaceID>] {
+        learnedSpaces
+    }
+
+    /// Pins windows moved outside a switcher session (display layout restore)
+    /// to their new space: CGS reports an empty space list for a while after
+    /// SLSMoveWindowsToManagedSpace, which would otherwise drop them from
+    /// every card until the next learning pass sees them onscreen.
+    @MainActor
+    static func recordExternalMoves(_ moves: [CGWindowID: CGSSpaceID]) {
+        for (wid, space) in moves where learnedSpaces[wid] != [space] {
+            learnedSpaces[wid] = [space]
             learnedDirty = true
         }
         persistLearnedIfNeeded()
@@ -89,6 +119,7 @@ enum SpaceSwitcherEngine {
     @MainActor
     static func buildModel(attributionOverrides: [CGWindowID: CGSSpaceID] = [:]) -> Model {
         let displays = WindowSpaces.displaySpacesSnapshot(order: Defaults[.spaceSwitcherDisplayOrder])
+        DisplayLayoutMemory.shared.noteSpaces(displays)
         let knownSpaceIDs = Set(displays.flatMap { $0.spaces.map(\.id) })
         let currentSpaceIDs = Set(displays.compactMap(\.currentSpaceID))
 
@@ -103,6 +134,7 @@ enum SpaceSwitcherEngine {
         }
 
         let spacesByWindow = perSpaceWindowMap(for: displays)
+        var frames: [CGWindowID: CGRect] = [:]
 
         for entry in list {
             guard let candidate = windowCandidate(from: entry, cachedByID: cachedByID) else { continue }
@@ -157,9 +189,13 @@ enum SpaceSwitcherEngine {
             for space in attribution.spaces {
                 windowsBySpace[space, default: []].append(window)
             }
+            if !attribution.isSticky {
+                frames[candidate.wid] = candidate.frame
+            }
         }
 
         persistLearnedIfNeeded()
+        DisplayLayoutMemory.shared.noteFrames(frames)
         return Model(displays: displays, windowsBySpace: windowsBySpace)
     }
 

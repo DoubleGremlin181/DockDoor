@@ -14,6 +14,9 @@ struct SpaceSwitcherSettingsView: View {
     @Default(.spaceSwitcherShowSpaceLabels) var spaceSwitcherShowSpaceLabels
     @Default(.spaceSwitcherShowDisplayNames) var spaceSwitcherShowDisplayNames
     @Default(.spaceSwitcherCardWidth) var spaceSwitcherCardWidth
+    @Default(.spaceSwitcherRememberDisplayLayouts) var rememberDisplayLayouts
+    @Default(.spaceSwitcherKeepUnpluggedDesktopsSeparate) var keepUnpluggedDesktopsSeparate
+    @Default(.debugMode) var debugMode
 
     /// Set when enabling the feature had to move its shortcut off one the
     /// Window Switcher owns; shown until the view reappears.
@@ -28,10 +31,83 @@ struct SpaceSwitcherSettingsView: View {
                     behaviorSection
                     placementSection
                     appearanceSection
+                    displayMemorySection
                 }
             }
         }
         .onAppear { reassignedKeybind = nil }
+    }
+
+    // MARK: - Display memory
+
+    private var displayMemorySection: some View {
+        SettingsGroup(header: "Display memory") {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(isOn: $rememberDisplayLayouts) {
+                    Text("Remember desktop layouts per display")
+                }
+                .settingsSearchTarget("spaceSwitcher.rememberDisplayLayouts")
+                Text("Uses what the Space Switcher already knows about your windows: when a display is unplugged its desktops are kept apart on the remaining display, and when it comes back its windows return to the desktops it has. Desktops are never created or removed.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 20)
+
+                if rememberDisplayLayouts, !NSScreen.screensHaveSeparateSpaces {
+                    SettingsWarningCallout(verbatim: String(localized: "Requires “Displays have separate Spaces” in System Settings → Desktop & Dock.", comment: "Display memory requirement callout"))
+                }
+
+                if rememberDisplayLayouts {
+                    Toggle(isOn: $keepUnpluggedDesktopsSeparate) {
+                        Text("Use empty desktops to keep unplugged desktops apart")
+                    }
+                    .settingsSearchTarget("spaceSwitcher.keepUnpluggedDesktopsSeparate")
+                    Text("If macOS folds two of the unplugged display’s desktops together, the second group of windows is moved onto an empty desktop of the remaining display when one is free.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.leading, 20)
+
+                    SettingsNote(icon: "rectangle.on.rectangle.slash", text: "Full-screen apps and windows shown on every desktop are left where macOS puts them. Identical monitors are told apart by their position in the arrangement.")
+
+                    HStack {
+                        Button {
+                            DisplayLayoutMemory.shared.forgetAll()
+                        } label: {
+                            Text("Forget remembered layouts")
+                        }
+                        .settingsSearchTarget("spaceSwitcher.forgetDisplayLayouts")
+
+                        if debugMode {
+                            Button {
+                                Task { await DisplayLayoutMemory.shared.restoreNow() }
+                            } label: {
+                                Text("Run restore now")
+                            }
+                        }
+                    }
+
+                    if debugMode {
+                        rememberedDisplaysList
+                    }
+                }
+            }
+        }
+    }
+
+    private var rememberedDisplaysList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            let summaries = DisplayLayoutMemory.shared.summaries
+            if summaries.isEmpty {
+                Text("No layouts remembered yet.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            ForEach(summaries) { summary in
+                Text(verbatim: "\(summary.name): \(summary.desktopCount) desktops, \(summary.updatedAt.formatted(date: .abbreviated, time: .shortened))\(summary.isPending ? " (absent)" : "")")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.leading, 20)
     }
 
     // MARK: - Header

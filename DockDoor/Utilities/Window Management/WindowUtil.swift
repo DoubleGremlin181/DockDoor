@@ -690,6 +690,12 @@ extension WindowUtil {
 // MARK: - Window Discovery
 
 extension WindowUtil {
+    /// Every cached window regardless of switcher filters (hidden, minimized,
+    /// frontmost-only), for callers that need the whole picture.
+    static func cachedWindowsUnfiltered() -> [WindowInfo] {
+        desktopSpaceWindowCacheManager.getAllWindows()
+    }
+
     static func getAllWindowsOfAllApps() -> [WindowInfo] {
         let windows = desktopSpaceWindowCacheManager.getAllWindows()
         var filteredWindows = !Defaults[.includeHiddenWindowsInSwitcher]

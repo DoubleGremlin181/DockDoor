@@ -186,6 +186,10 @@ extension Defaults.Keys {
     static let spaceSwitcherDisplayOrder = Key<SpaceSwitcherDisplayOrder>("spaceSwitcherDisplayOrder", default: .mainDisplayFirst)
     static let spaceSwitcherShowDisplayNames = Key<Bool>("spaceSwitcherShowDisplayNames", default: true)
 
+    // Display layout memory (per-display desktop/window assignments across disconnects)
+    static let spaceSwitcherRememberDisplayLayouts = Key<Bool>("spaceSwitcherRememberDisplayLayouts", default: false)
+    static let spaceSwitcherKeepUnpluggedDesktopsSeparate = Key<Bool>("spaceSwitcherKeepUnpluggedDesktopsSeparate", default: true)
+
     static let showAppName = Key<Bool>("showAppName", default: true)
     static let appNameStyle = Key<AppNameStyle>("appNameStyle", default: .default)
     static let selectionOpacity = Key<CGFloat>("selectionOpacity", default: 0.4)
