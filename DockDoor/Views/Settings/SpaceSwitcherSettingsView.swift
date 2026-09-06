@@ -7,7 +7,6 @@ struct SpaceSwitcherSettingsView: View {
     @Default(.spaceSwitcherStayOpenOnRelease) var spaceSwitcherStayOpenOnRelease
     @Default(.spaceSwitcherStartOnSecondSpace) var spaceSwitcherStartOnSecondSpace
     @Default(.spaceSwitcherWarpCursor) var spaceSwitcherWarpCursor
-    @Default(.spaceSwitcherAnimationSpeed) var animationSpeed
     @Default(.spaceSwitcherPreviewDelay) var previewDelay
     @Default(.spaceSwitcherPlacementStrategy) var placementStrategy
     @Default(.spaceSwitcherPinnedScreenIdentifier) var pinnedScreenIdentifier
@@ -159,18 +158,6 @@ struct SpaceSwitcherSettingsView: View {
                 Toggle(isOn: $spaceSwitcherStartOnSecondSpace) { Text("Start on second Space") }
                     .settingsSearchTarget("spaceSwitcher.startOnSecond")
                 Text("Highlight the next Space instead of the current one when opening.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.leading, 20)
-
-                Picker(String(localized: "Animation speed", comment: "Space Switcher animation speed picker label"), selection: $animationSpeed) {
-                    ForEach(SpaceSwitcherAnimationSpeed.allCases) { speed in
-                        Text(speed.localizedName).tag(speed)
-                    }
-                }
-                .pickerStyle(.menu)
-                .settingsSearchTarget("spaceSwitcher.animationSpeed")
-                Text("How fast the desktop slides when switching. “macOS default” lets the system animate by focusing a window on the selected Space.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 20)

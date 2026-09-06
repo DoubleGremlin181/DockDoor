@@ -656,10 +656,16 @@ enum WindowSpaces {
         static let phaseChanged: Int64 = 2
         static let phaseEnded: Int64 = 4
 
-        /// The Dock drops phases posted back to back; ~10 ms apart is enough.
+        /// The Dock drops phases posted closer together than this (5 ms loses
+        /// gestures); consecutive gestures need no gap at all.
         static let phaseInterval: TimeInterval = 0.01
-        /// One began/changed/ended sequence per space
+        /// One began/changed/ended sequence per Space
         static var stepDuration: TimeInterval { phaseInterval * 3 }
+        /// InstantSpaceSwitcher's "Instant": the Dock applies the switch as a
+        /// cut instead of animating it. With the steps posted back to back,
+        /// every cut of a multi-Space jump lands inside one display refresh,
+        /// so the desktops in between are never drawn.
+        static let velocity = 2000.0
     }
 
     /// Switches to a space by synthesizing Mission Control dock-swipe gestures.
@@ -668,7 +674,7 @@ enum WindowSpaces {
     /// The gesture applies to the display under the cursor, so the cursor is
     /// warped to the target display first and restored unless `keepCursor`.
     @discardableResult
-    static func switchViaDockGesture(to space: SpaceInfo, on display: DisplaySpaces, keepCursor: Bool, velocity: Double) -> Bool {
+    static func switchViaDockGesture(to space: SpaceInfo, on display: DisplaySpaces, keepCursor: Bool) -> Bool {
         guard let currentID = display.currentSpaceID,
               let currentIndex = display.spaces.firstIndex(where: { $0.id == currentID }),
               let targetIndex = display.spaces.firstIndex(where: { $0.id == space.id }),
@@ -687,16 +693,19 @@ enum WindowSpaces {
 
         let steps = abs(targetIndex - currentIndex)
         let sign: Double = targetIndex > currentIndex ? 1.0 : -1.0
+        DebugLogger.log("WindowSpaces.switchViaDockGesture", details: "\(currentID) → \(space.id): \(steps) step(s) \(sign > 0 ? "right" : "left")")
 
-        // One swipe per space, like InstantSpaceSwitcher: the velocity scales
-        // with the step count so a long jump takes about as long as a short one.
-        let stepVelocity = velocity * Double(steps)
-        for step in 0 ..< steps {
-            let offset = Double(step) * DockGesture.stepDuration
-            for (index, phase) in [DockGesture.phaseBegan, DockGesture.phaseChanged, DockGesture.phaseEnded].enumerated() {
-                DispatchQueue.main.asyncAfter(deadline: .now() + offset + Double(index) * DockGesture.phaseInterval) {
-                    postSwipeEvent(phase: phase, sign: sign, velocity: stepVelocity)
-                }
+        // One instant swipe per Space, paced precisely off the main thread:
+        // the Dock performs each switch itself, so it stays in sync.
+        DispatchQueue.global(qos: .userInteractive).async {
+            let pause = useconds_t(DockGesture.phaseInterval * 1_000_000)
+            for _ in 0 ..< steps {
+                postSwipeEvent(phase: DockGesture.phaseBegan, sign: sign)
+                usleep(pause)
+                postSwipeEvent(phase: DockGesture.phaseChanged, sign: sign)
+                usleep(pause)
+                postSwipeEvent(phase: DockGesture.phaseEnded, sign: sign)
+                usleep(pause)
             }
         }
 
@@ -706,16 +715,13 @@ enum WindowSpaces {
         return true
     }
 
-    /// A near-zero progress with the velocity carrying the speed: the Dock
-    /// animates the whole slide itself, faster for higher velocities. A full
-    /// progress (±1) posted in one go is applied as an instant cut instead.
-    private static func postSwipeEvent(phase: Int64, sign: Double, velocity: Double) {
+    private static func postSwipeEvent(phase: Int64, sign: Double) {
         guard let event = CGEvent(source: nil) else { return }
         event.setIntegerValueField(DockGesture.eventType, value: DockGesture.dockControl)
         event.setIntegerValueField(DockGesture.hidType, value: DockGesture.dockSwipe)
         event.setIntegerValueField(DockGesture.swipeMotion, value: DockGesture.horizontal)
         event.setDoubleValueField(DockGesture.swipeProgress, value: sign * Double(Float.leastNonzeroMagnitude))
-        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * velocity)
+        event.setDoubleValueField(DockGesture.swipeVelocityX, value: sign * DockGesture.velocity)
         event.setIntegerValueField(DockGesture.gesturePhase, value: phase)
         event.post(tap: .cgSessionEventTap)
     }

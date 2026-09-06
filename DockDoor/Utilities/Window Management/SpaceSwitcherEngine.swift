@@ -395,16 +395,6 @@ enum SpaceSwitcherEngine {
     /// Monotonic commit counter so a stale verify task never fights a newer commit
     @MainActor private static var commitGeneration = 0
 
-    /// "When switching to an application, switch to a Space with open windows"
-    /// (System Settings → Desktop & Dock). On by default; when off, focusing a
-    /// window on another Space does not switch to it.
-    static var switchesSpaceOnActivation: Bool {
-        (CFPreferencesCopyAppValue("workspaces-auto-swoosh" as CFString, "com.apple.dock" as CFString) as? Bool) ?? true
-    }
-
-    /// Gesture speed for the fallbacks when the preset has no velocity
-    private static let fallbackVelocity = 40.0
-
     @MainActor
     static func switchTo(space: SpaceInfo, in model: Model) {
         // Resolve current state freshly at commit time: the user may have
@@ -416,31 +406,11 @@ enum SpaceSwitcherEngine {
         }
 
         commitGeneration += 1
-        let generation = commitGeneration
-        let originSpaceID = display.currentSpaceID
+        // Instant Dock walk for every switch: direct landing on any desktop
+        // of any display, empty or not, with the desktops in between never
+        // drawn. Falls back to focusing a window on the Space.
         let focusTarget = model.windowsBySpace[space.id]?.first(where: { !$0.isSticky && $0.info != nil })?.info
-        let velocity = Defaults[.spaceSwitcherAnimationSpeed].gestureVelocity
-        let steps = stepCount(from: originSpaceID, to: space.id, on: display)
-        let canFocus = focusTarget != nil && switchesSpaceOnActivation
-
-        if let velocity, steps == 1 || !canFocus {
-            // Adjacent switch at the chosen speed — or a walk, when there is
-            // no window on the target to focus. Falls back to focusing a
-            // window on the Space, then to CGS.
-            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: velocity, retried: false)
-        } else if let focusTarget, canFocus {
-            // Direct jump: focus the Space's frontmost window and let macOS
-            // slide there in one motion, however far away it is — a Dock
-            // gesture can only move one Space at a time and would show every
-            // desktop in between.
-            focusTarget.bringToFront()
-            verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, onPath: [], after: 500_000_000) { _ in
-                DebugLogger.log("SpaceSwitcherEngine", details: "focus did not switch; gesture fallback to \(space.id)")
-                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: originSpaceID, focusTarget: nil, velocity: velocity ?? fallbackVelocity, retried: false)
-            }
-        } else {
-            gestureThenVerify(space: space, on: display, generation: generation, originSpaceID: originSpaceID, focusTarget: focusTarget, velocity: fallbackVelocity, retried: false)
-        }
+        gestureThenVerify(space: space, on: display, generation: commitGeneration, originSpaceID: display.currentSpaceID, focusTarget: focusTarget, retried: false)
         // The Space change this causes is observed like any other; the window
         // cache refresh that follows it is not repeated here.
     }
@@ -467,27 +437,24 @@ enum SpaceSwitcherEngine {
     }
 
     @MainActor
-    private static func gestureThenVerify(space: SpaceInfo, on display: DisplaySpaces?, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, velocity: Double, retried: Bool) {
+    private static func gestureThenVerify(space: SpaceInfo, on display: DisplaySpaces?, generation: Int, originSpaceID: CGSSpaceID?, focusTarget: WindowInfo?, retried: Bool) {
         guard let display = display ?? SpaceTopology.shared.spaces().display(for: space.displayIdentifier) else { return }
-        WindowSpaces.switchViaDockGesture(
-            to: space,
-            on: display,
-            keepCursor: Defaults[.spaceSwitcherWarpCursor],
-            velocity: velocity
-        )
+        WindowSpaces.switchViaDockGesture(to: space, on: display, keepCursor: Defaults[.spaceSwitcherWarpCursor])
         let onPath = spacesOnPath(from: display.currentSpaceID, to: space.id, on: display)
         let walk = UInt64(max(1, stepCount(from: display.currentSpaceID, to: space.id, on: display))) * 40_000_000
-        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, onPath: onPath, after: 900_000_000 + walk) { landed in
+        verifySwitch(space: space, generation: generation, originSpaceID: originSpaceID, onPath: onPath, after: 600_000_000 + walk) { landed in
             if !retried, onPath.contains(landed) {
                 // Landed short: the Dock dropped a swipe. Walk the rest once.
                 DebugLogger.log("SpaceSwitcherEngine", details: "gesture landed short on \(landed); re-issuing the remaining steps to \(space.id)")
-                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: landed, focusTarget: focusTarget, velocity: velocity, retried: true)
+                gestureThenVerify(space: space, on: nil, generation: generation, originSpaceID: landed, focusTarget: focusTarget, retried: true)
             } else if let focusTarget {
                 DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; bringToFront fallback wid=\(focusTarget.id)")
                 focusTarget.bringToFront()
             } else {
-                DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch; CGS fallback to \(space.id)")
-                WindowSpaces.setCurrentSpace(space.id, onDisplay: space.displayIdentifier)
+                // No window to focus and no safe direct call: the raw
+                // window-server switch only rewrites bookkeeping and leaves the
+                // Dock out of sync, so give up rather than desync.
+                DebugLogger.log("SpaceSwitcherEngine", details: "gesture did not switch and nothing to focus on \(space.id); giving up")
             }
         }
     }

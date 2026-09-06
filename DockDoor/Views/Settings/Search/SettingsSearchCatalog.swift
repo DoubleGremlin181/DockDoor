@@ -646,15 +646,6 @@ enum SettingsSearchCatalog {
             icon: "ruler"
         ),
         SettingsSearchItem(
-            id: "spaceSwitcher.animationSpeed",
-            title: String(localized: "Animation speed"),
-            description: String(localized: "How fast the desktop slides when switching. “macOS default” lets the system animate by focusing a window on the selected Space."),
-            keywords: ["animation", "speed", "fast", "instant", "slide", "space", "switch", "InstantSpaceSwitcher"],
-            tab: "SpaceSwitcher",
-            section: String(localized: "Behavior"),
-            icon: "hare"
-        ),
-        SettingsSearchItem(
             id: "spaceSwitcher.previewDelay",
             title: String(localized: "Preview delay"),
             description: String(localized: "How long opening waits for previews still loading. Previews start loading when the shortcut’s modifier is pressed and are kept for a minute."),

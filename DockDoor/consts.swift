@@ -185,7 +185,6 @@ extension Defaults.Keys {
     static let spaceSwitcherPinnedScreenIdentifier = Key<String>("spaceSwitcherPinnedScreenIdentifier", default: "")
     static let spaceSwitcherDisplayOrder = Key<SpaceSwitcherDisplayOrder>("spaceSwitcherDisplayOrder", default: .mainDisplayFirst)
     static let spaceSwitcherShowDisplayNames = Key<Bool>("spaceSwitcherShowDisplayNames", default: true)
-    static let spaceSwitcherAnimationSpeed = Key<SpaceSwitcherAnimationSpeed>("spaceSwitcherAnimationSpeed", default: .faster)
     /// Longest wait for fresh previews before the panel shows (seconds)
     static let spaceSwitcherPreviewDelay = Key<Double>("spaceSwitcherPreviewDelay", default: 0.1)
 
@@ -988,43 +987,8 @@ enum WindowPreviewSortOrder: String, CaseIterable, Defaults.Serializable, Identi
     }
 }
 
-enum SpaceSwitcherAnimationSpeed: String, CaseIterable, Defaults.Serializable, Identifiable {
-    case system
-    case normal
-    case fast
-    case faster
-    case fastest
-    case instant
-
-    var id: String { rawValue }
-
-    /// Dock swipe velocity; nil = use the native window-focus route
-    var gestureVelocity: Double? {
-        switch self {
-        case .system: nil
-        case .normal: 40
-        case .fast: 50
-        case .faster: 60
-        case .fastest: 80
-        case .instant: 2000
-        }
-    }
-
-    var localizedName: String {
-        switch self {
-        case .system: String(localized: "macOS default", comment: "Space Switcher animation speed option")
-        case .normal: String(localized: "Normal", comment: "Space Switcher animation speed option")
-        case .fast: String(localized: "Fast", comment: "Space Switcher animation speed option")
-        case .faster: String(localized: "Faster", comment: "Space Switcher animation speed option")
-        case .fastest: String(localized: "Fastest", comment: "Space Switcher animation speed option")
-        case .instant: String(localized: "Instant", comment: "Space Switcher animation speed option")
-        }
-    }
-}
-
 /// How display rows are stacked in the Space Switcher panel when more than
 /// one display has its own Spaces.
-/// How fast the Dock slides to the selected Space. The presets and their
 /// gesture velocities mirror InstantSpaceSwitcher; `system` leaves the
 /// animation to macOS by focusing a window on the target Space instead.
 enum SpaceSwitcherDisplayOrder: String, CaseIterable, Defaults.Serializable, Identifiable {
