@@ -184,6 +184,14 @@ final class ActiveAppIndicatorCoordinator {
         }
 
         updateDockVisibilityState()
+
+        // A display coming or going moves Spaces (and their windows) between
+        // displays without any activation event; once the Dock has settled,
+        // re-sync with the app that is actually frontmost and reposition.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self, indicatorWindow != nil, let frontmost = NSWorkspace.shared.frontmostApplication else { return }
+            handleActiveAppChanged(frontmost)
+        }
     }
 
     // MARK: - Dock Item Change Notifications
