@@ -353,8 +353,8 @@ final class DisplayLayoutMemory {
         }.value
     }
 
-    /// Keeps the Space Switcher and the window cache consistent with moves
-    /// CGS will not report for a while.
+    /// Keeps the learned map and the window cache consistent with the moves
+    /// without waiting for the next learning pass.
     private func integrateMoves(_ moves: [CGWindowID: CGSSpaceID]) {
         guard !moves.isEmpty else { return }
         SpaceSwitcherEngine.recordExternalMoves(moves)

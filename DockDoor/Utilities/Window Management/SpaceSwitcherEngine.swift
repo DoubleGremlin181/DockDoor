@@ -44,12 +44,12 @@ enum SpaceSwitcherEngine {
 
     private static let minWindowSize = CGSize(width: 80, height: 50)
 
-    /// Memory of window→space attribution. CGSCopySpacesForWindows returns []
-    /// for windows on inactive spaces on modern macOS, so every authoritative
-    /// attribution (CGS answer, onscreen containment) is recorded here to keep
-    /// non-current spaces populated after they've been seen once. Persisted so
-    /// app relaunches start warm (window IDs are stable while windows live;
-    /// dead entries are ignored because only enumerated windows are looked up).
+    /// Where each window lived, as last reported by the window server. Not an
+    /// attribution source for the switcher (the live answer is always used);
+    /// it is the record Display Layout Memory reads when a display goes away
+    /// and its Spaces are gone. Persisted so relaunches start warm (window IDs
+    /// are stable while windows live; dead entries are ignored because only
+    /// enumerated windows are looked up).
     private static let learnedStore = Defaults.Key<Data>("spaceSwitcherLearnedSpaces", default: Data())
 
     @MainActor private static var learnedSpaces: [CGWindowID: Set<CGSSpaceID>] = (try? JSONDecoder().decode([CGWindowID: Set<CGSSpaceID>].self, from: Defaults[learnedStore])) ?? [:]
@@ -150,10 +150,8 @@ enum SpaceSwitcherEngine {
         learnedSpaces
     }
 
-    /// Pins windows moved outside a switcher session (display layout restore)
-    /// to their new space: CGS reports an empty space list for a while after
-    /// SLSMoveWindowsToManagedSpace, which would otherwise drop them from
-    /// every card until the next learning pass sees them onscreen.
+    /// Records windows moved by a display layout restore so the map is right
+    /// for a reconfiguration that arrives before the next learning pass.
     @MainActor
     static func recordExternalMoves(_ moves: [CGWindowID: CGSSpaceID]) {
         for (wid, space) in moves where learnedSpaces[wid] != [space] {
@@ -165,17 +163,16 @@ enum SpaceSwitcherEngine {
 
     /// Builds the model from a fresh CGWindowList enumeration so frames and
     /// space assignments are current; DockDoor's window cache contributes
-    /// thumbnails, titles, and AX handles where available.
+    /// thumbnails, titles, and AX handles where available. Space assignment
+    /// comes straight from the window server (per-Space membership, then the
+    /// per-window query), which answers for every Space and reflects a move
+    /// immediately.
     ///
-    /// `attributionOverrides` pins windows the session just moved to their
-    /// target space: CGS reports an empty space list for a while after
-    /// SLSMoveWindowsToManagedSpace, which would otherwise make the moved
-    /// window vanish from every card (unseeable and un-undoable).
     /// `includeAll` skips the switcher's visibility filters (minimized and
     /// hidden windows): display layout memory needs every window on every
     /// desktop.
     @MainActor
-    static func buildModel(attributionOverrides: [CGWindowID: CGSSpaceID] = [:], includeAll: Bool = false) -> Model {
+    static func buildModel(includeAll: Bool = false) -> Model {
         let table = SpaceTopology.shared.spaces()
         let displays = WindowSpaces.orderedRows(from: table, order: Defaults[.spaceSwitcherDisplayOrder])
         let knownSpaceIDs = table.knownSpaceIDs
@@ -207,39 +204,21 @@ enum SpaceSwitcherEngine {
             if fresh.isEmpty {
                 fresh = candidate.wid.cgsSpaces().filter { knownSpaceIDs.contains($0) }
             }
-            let center = CGPoint(x: candidate.frame.midX, y: candidate.frame.midY)
-            guard let attribution = resolveAttribution(
-                fresh: fresh,
-                moveOverride: attributionOverrides[candidate.wid],
-                onscreenCurrentSpaceID: candidate.isOnscreen ? table.currentSpaceID(containing: center) : nil,
-                learned: learnedSpaces[candidate.wid],
-                cachedSpaceID: candidate.info?.spaceID.map { CGSSpaceID($0) },
-                knownSpaceIDs: knownSpaceIDs
-            ) else { continue }
+            guard let attribution = resolveAttribution(fresh: fresh) else { continue }
 
             // A minimized window is offscreen on a visible Space by definition;
-            // the ghost filter would reject and unlearn it.
+            // the ghost filter would reject it.
             let isMinimized = includeAll && candidate.info?.isMinimized == true
             let hasTitle = (candidate.cgTitle?.isEmpty == false) || (candidate.info?.windowName?.isEmpty == false)
-            switch isMinimized ? .accept : ghostFilterVerdict(
+            guard isMinimized || isGhost(
                 spaces: attribution.spaces,
                 isOnscreen: candidate.isOnscreen,
                 currentSpaceIDs: currentSpaceIDs,
                 isKnownToDiscovery: candidate.info != nil,
                 hasTitle: hasTitle
-            ) {
-            case .rejectAndUnlearn:
-                if learnedSpaces.removeValue(forKey: candidate.wid) != nil {
-                    learnedDirty = true
-                }
-                continue
-            case .reject:
-                continue
-            case .accept:
-                break
-            }
+            ) == false else { continue }
 
-            if attribution.isAuthoritative, learnedSpaces[candidate.wid] != Set(attribution.spaces) {
+            if learnedSpaces[candidate.wid] != Set(attribution.spaces) {
                 learnedSpaces[candidate.wid] = Set(attribution.spaces)
                 learnedDirty = true
             }
@@ -322,74 +301,38 @@ enum SpaceSwitcherEngine {
 
     struct Attribution: Equatable {
         let spaces: [CGSSpaceID]
+        /// On more than one Space — never a switch target
         let isSticky: Bool
-        /// From a live CGS answer — safe to record in the learned map
-        let isAuthoritative: Bool
     }
 
-    /// Attribution chain: fresh CGS answer → session move override → onscreen
-    /// containment → learned map → cached discovery spaceID. The onscreen rule
-    /// covers follow-the-active-space windows (some Electron apps): shown on
-    /// the current space but sticky (never a switch target) and never learned,
-    /// or they'd get pinned to whatever space happened to be active.
-    /// Internal for testing.
-    static func resolveAttribution(
-        fresh: [CGSSpaceID],
-        moveOverride: CGSSpaceID?,
-        onscreenCurrentSpaceID: CGSSpaceID?,
-        learned: Set<CGSSpaceID>?,
-        cachedSpaceID: CGSSpaceID?,
-        knownSpaceIDs: Set<CGSSpaceID>
-    ) -> Attribution? {
-        if !fresh.isEmpty {
-            return Attribution(spaces: fresh, isSticky: fresh.count > 1, isAuthoritative: true)
-        }
-        if let moveOverride, knownSpaceIDs.contains(moveOverride) {
-            return Attribution(spaces: [moveOverride], isSticky: true, isAuthoritative: false)
-        }
-        if let onscreenCurrentSpaceID {
-            return Attribution(spaces: [onscreenCurrentSpaceID], isSticky: true, isAuthoritative: false)
-        }
-        if let learned {
-            let valid = learned.filter { knownSpaceIDs.contains($0) }
-            if !valid.isEmpty {
-                return Attribution(spaces: Array(valid), isSticky: valid.count > 1, isAuthoritative: false)
-            }
-        }
-        if let cachedSpaceID, knownSpaceIDs.contains(cachedSpaceID) {
-            return Attribution(spaces: [cachedSpaceID], isSticky: false, isAuthoritative: false)
-        }
-        return nil
+    /// The window server's answer is the only attribution source: it names
+    /// every Space a window is on, for any Space, and reflects a move at once.
+    /// An empty answer means the window is on no Space (an ordered-out helper
+    /// surface) and is left out. Internal for testing.
+    static func resolveAttribution(fresh: [CGSSpaceID]) -> Attribution? {
+        guard !fresh.isEmpty else { return nil }
+        return Attribution(spaces: fresh, isSticky: fresh.count > 1)
     }
 
-    enum GhostFilterVerdict: Equatable {
-        case accept
-        /// Invisible helper surface; its stale learned attribution should be dropped
-        case rejectAndUnlearn
-        case reject
-    }
-
-    /// Ghost filters (mirror upstream shouldAcceptWindow). A window whose
-    /// attributed spaces are all currently visible yet is not onscreen is an
-    /// invisible helper surface — it would render as a black box. Offscreen
-    /// windows on other spaces must be vouched for: known to DockDoor's
+    /// Ghost filters (mirror upstream shouldAcceptWindow). A window on only
+    /// currently visible Spaces yet not onscreen is minimized or hidden, not
+    /// something to draw — its capture would be a stale or black box. Offscreen
+    /// windows on other Spaces must be vouched for: known to DockDoor's
     /// AX-vetted discovery or carrying a real title; untitled unknowns are
-    /// transparent helper surfaces (Electron apps park them on spaces) that
+    /// transparent helper surfaces (Electron apps park them on Spaces) that
     /// capture as faint empty outlines. Internal for testing.
-    static func ghostFilterVerdict(
+    static func isGhost(
         spaces: [CGSSpaceID],
         isOnscreen: Bool,
         currentSpaceIDs: Set<CGSSpaceID>,
         isKnownToDiscovery: Bool,
         hasTitle: Bool
-    ) -> GhostFilterVerdict {
-        if !isOnscreen, spaces.allSatisfy({ currentSpaceIDs.contains($0) }) {
-            return .rejectAndUnlearn
+    ) -> Bool {
+        guard !isOnscreen else { return false }
+        if spaces.allSatisfy({ currentSpaceIDs.contains($0) }) {
+            return true
         }
-        if !isOnscreen, !isKnownToDiscovery, !hasTitle {
-            return .reject
-        }
-        return .accept
+        return !isKnownToDiscovery && !hasTitle
     }
 
     /// Monotonic commit counter so a stale verify task never fights a newer commit

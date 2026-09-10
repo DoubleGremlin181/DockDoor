@@ -180,8 +180,9 @@ private func loadSkyLightFunctions() {
     }
 }
 
-/// Windows belonging to the given space — works for non-current spaces, unlike
-/// CGSCopySpacesForWindows on modern macOS. Empty when the symbol is missing.
+/// Windows belonging to the given space (one query per Space; the per-window
+/// counterpart is CGSCopySpacesForWindows with kCGSAllSpacesMask). Empty when
+/// the symbol is missing.
 func CGSCopyWindowsForSpace(_ cid: CGSConnectionID, _ spaceID: CGSSpaceID) -> [CGWindowID] {
     loadSkyLightFunctions()
     guard let fn = copyWindowsWithOptionsPtr else { return [] }

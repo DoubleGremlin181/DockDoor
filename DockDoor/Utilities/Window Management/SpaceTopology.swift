@@ -69,16 +69,9 @@ final class SpaceTopology: @unchecked Sendable {
         let displays: [DisplaySpaces]
         let knownSpaceIDs: Set<CGSSpaceID>
         let currentSpaceIDs: Set<CGSSpaceID>
-        /// Each display's current Space with the display's CG frame, for
-        /// attributing onscreen windows by position
-        let currentSpaceByFrame: [(frame: CGRect, spaceID: CGSSpaceID)]
 
         func display(for identifier: String) -> DisplaySpaces? {
             displays.first { $0.identifier == identifier }
-        }
-
-        func currentSpaceID(containing point: CGPoint) -> CGSSpaceID? {
-            currentSpaceByFrame.first { $0.frame.contains(point) }?.spaceID
         }
     }
 
@@ -300,7 +293,6 @@ final class SpaceTopology: @unchecked Sendable {
         var desktopCounter = 0
         var knownSpaceIDs: Set<CGSSpaceID> = []
         var currentSpaceIDs: Set<CGSSpaceID> = []
-        var currentSpaceByFrame: [(frame: CGRect, spaceID: CGSSpaceID)] = []
         let displays = ordered.map { display in
             let spaces: [SpaceInfo] = display.spaceDicts.compactMap { dict in
                 guard let id = spaceID(from: dict) else { return nil }
@@ -318,9 +310,6 @@ final class SpaceTopology: @unchecked Sendable {
             }
             if let current = display.currentSpaceID {
                 currentSpaceIDs.insert(current)
-                if let screen = display.screen {
-                    currentSpaceByFrame.append((screen.cgFrame, current))
-                }
             }
             return DisplaySpaces(identifier: display.identifier, screen: display.screen, currentSpaceID: display.currentSpaceID, spaces: spaces)
         }
@@ -331,8 +320,7 @@ final class SpaceTopology: @unchecked Sendable {
             capturedAt: Date(),
             displays: displays,
             knownSpaceIDs: knownSpaceIDs,
-            currentSpaceIDs: currentSpaceIDs,
-            currentSpaceByFrame: currentSpaceByFrame
+            currentSpaceIDs: currentSpaceIDs
         )
     }
 }

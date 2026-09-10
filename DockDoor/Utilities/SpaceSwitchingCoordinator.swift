@@ -5,11 +5,6 @@ import Defaults
 final class SpaceSwitchingCoordinator {
     private var panel: SpaceSwitcherPanelCoordinator?
     private var state: SpaceSwitcherState?
-    /// Windows this session moved, pinned to their target space until CGS
-    /// starts reporting their assignment again (it returns [] right after a
-    /// move, which would otherwise drop them from every card).
-    private var recentMoves: [CGWindowID: CGSSpaceID] = [:]
-
     /// Fired whenever a session ends (or an activation no-ops), so the owning
     /// KeybindHelper can clear its tap-thread session flag on every exit path,
     /// including card clicks that never route back through the event tap.
@@ -41,7 +36,7 @@ final class SpaceSwitchingCoordinator {
         }
 
         // Display layout memory is about to move windows between spaces: an
-        // open session's buckets would be wrong, and its recentMoves stale.
+        // open session's buckets would be wrong.
         restoreObserver = NotificationCenter.default.addObserver(
             forName: DisplayLayoutMemory.restoreWillBegin,
             object: nil,
@@ -377,14 +372,12 @@ final class SpaceSwitchingCoordinator {
         let moved = WindowSpaces.move(windowID: windowID, toManagedSpace: space.id)
         DebugLogger.log("SpaceSwitcher", details: "drag-move wid=\(windowID) to space \(space.id): \(moved)")
         if moved, let state {
-            recentMoves[windowID] = space.id
-            state.model = SpaceSwitcherEngine.buildModel(attributionOverrides: recentMoves)
+            state.model = SpaceSwitcherEngine.buildModel()
         }
     }
 
     @MainActor
     private func endSession() {
-        recentMoves = [:]
         panel?.hide()
         panel?.close()
         panel = nil
@@ -424,8 +417,7 @@ final class SpaceSwitchingCoordinator {
         let moved = WindowSpaces.move(windowID: windowID, toManagedSpace: space.id)
         DebugLogger.log("SpaceSwitcher", details: "move wid=\(windowID) app=\(frontApp.localizedName ?? "?") to space \(space.id): \(moved)")
         if moved {
-            recentMoves[windowID] = space.id
-            state.model = SpaceSwitcherEngine.buildModel(attributionOverrides: recentMoves)
+            state.model = SpaceSwitcherEngine.buildModel()
         }
     }
 
