@@ -508,10 +508,26 @@ func currentActiveSpaceIDs() -> Set<Int> {
 
 enum WindowSpaces {
     /// Every Space macOS currently manages on any display, for telling a window
-    /// on another Space apart from a ghost whose Spaces no longer exist.
+    /// on another Space apart from a ghost whose Spaces no longer exist. Read
+    /// straight from the window server: this runs on discovery worker threads,
+    /// where the NSScreen-backed topology tables must not be touched.
     static func allManagedSpaceIDs() -> Set<Int> {
-        let table = SpaceTopology.shared.spaces(maxAge: 1)
-        return Set(table.knownSpaceIDs.union(table.currentSpaceIDs).map { Int($0) })
+        guard let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: AnyObject]] else { return [] }
+        func spaceID(_ dictionary: [String: AnyObject]?) -> Int? {
+            ((dictionary?["ManagedSpaceID"] as? NSNumber) ?? (dictionary?["id64"] as? NSNumber))?.intValue
+        }
+        var ids = Set<Int>()
+        for display in displays {
+            if let current = spaceID(display["Current Space"] as? [String: AnyObject]) {
+                ids.insert(current)
+            }
+            for space in display["Spaces"] as? [[String: AnyObject]] ?? [] {
+                if let id = spaceID(space) {
+                    ids.insert(id)
+                }
+            }
+        }
+        return ids
     }
 
     private static func screenContainingMouse(_ mouseLocation: CGPoint) -> NSScreen? {
@@ -549,6 +565,13 @@ enum WindowSpaces {
         }
         let moved = SLSMoveWindowsToManagedSpace(windowIDs, targetSpaceID)
         if moved {
+            // The window server applies the move asynchronously (measured well
+            // under 20 ms). Wait, briefly, until it reports the new Space so a
+            // model rebuilt right after sees the window where it now is.
+            let deadline = Date().addingTimeInterval(0.15)
+            while Date() < deadline, windowIDs.contains(where: { !$0.cgsSpaces().contains(targetSpaceID) }) {
+                usleep(5000)
+            }
             SpaceTopology.shared.invalidateMembership()
         }
         return moved

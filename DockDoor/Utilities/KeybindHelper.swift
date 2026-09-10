@@ -406,6 +406,9 @@ class KeybindHelper {
 
     init(previewCoordinator: SharedPreviewWindowCoordinator) {
         self.previewCoordinator = previewCoordinator
+        spaceSwitchingCoordinator.onSessionBegin = { [weak self] in
+            self?.spaceSwitcherSessionActive = true
+        }
         spaceSwitchingCoordinator.onSessionEnd = { [weak self] in
             self?.spaceSwitcherSessionActive = false
         }
@@ -1063,6 +1066,24 @@ class KeybindHelper {
             keyCode == $0.keyCode && Self.modifierFlagsMatch($0.modifierFlags, flags: flags)
         } ?? false
 
+        // An open Space Switcher session owns the keyboard (Escape included)
+        // before the Window Switcher's and hover preview's Escape handling.
+        if spaceSwitcherSessionActive {
+            if let result = determineActionForSpaceSwitcherKeyDown(keyCode: keyCode, flags: flags) {
+                return result
+            }
+            // The Window Switcher's own chord takes over from an open (stay-open)
+            // Space session; any other foreign chord passes through to the app.
+            guard isExactSwitcherShortcutPressed || isAlternateShortcutPressed else {
+                return (false, nil)
+            }
+            spaceSwitcherSessionActive = false
+            Task { @MainActor in
+                self.hasProcessedSpaceModifierRelease = true
+                self.spaceSwitchingCoordinator.cancel()
+            }
+        }
+
         if previewIsCurrentlyVisible || snapshot.fullPreviewFrame != nil,
            keyCode == kVK_Escape, !isExactSwitcherShortcutPressed, !isAlternateShortcutPressed
         {
@@ -1073,13 +1094,6 @@ class KeybindHelper {
                 self.preventSwitcherHideOnRelease = false
                 self.hasProcessedModifierRelease = true
             })
-        }
-
-        if spaceSwitcherSessionActive {
-            if let result = determineActionForSpaceSwitcherKeyDown(keyCode: keyCode, flags: flags) {
-                return result
-            }
-            return (false, nil)
         }
 
         if previewIsCurrentlyVisible {

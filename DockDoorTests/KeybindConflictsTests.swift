@@ -130,6 +130,18 @@ struct KeybindConflictsTests {
         }
     }
 
+    @Test func primaryRejectedWhenEqualToAlternateWithOwnModifier() {
+        withDefaults({
+            Defaults[.enableSpaceSwitcher] = false
+            Defaults[.alternateKeybindKey] = UInt16(kVK_ANSI_Grave)
+            Defaults[.alternateKeybindModifierFlags] = Defaults[.Int64maskControl]
+        }) {
+            let ctrlGrave = UserKeyBind(keyCode: UInt16(kVK_ANSI_Grave), modifierFlags: Defaults[.Int64maskControl])
+            #expect(KeybindConflicts.validateWindowSwitcherKeybind(ctrlGrave) != nil)
+            #expect(KeybindConflicts.validateWindowSwitcherKeybind(cmdTab) == nil)
+        }
+    }
+
     // MARK: Window primary modifier change vs alternate key
 
     @Test func windowModifierChangeCheckedAgainstAlternateChord() {

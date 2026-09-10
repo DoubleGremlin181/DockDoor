@@ -9,6 +9,10 @@ final class SpaceSwitchingCoordinator {
     /// KeybindHelper can clear its tap-thread session flag on every exit path,
     /// including card clicks that never route back through the event tap.
     var onSessionEnd: (() -> Void)?
+    /// Fired on the main thread once a session's state exists, so the owning
+    /// KeybindHelper's tap-thread flag is re-asserted even when a previous
+    /// session's end callback landed after the new chord was seen.
+    var onSessionBegin: (() -> Void)?
 
     private var topologySubscription: UUID?
     private var restoreObserver: NSObjectProtocol?
@@ -16,7 +20,16 @@ final class SpaceSwitchingCoordinator {
     init() {
         // Learning from normal space usage is shared with display layout
         // memory; whichever feature starts first turns it on.
-        Task { @MainActor in SpaceSwitcherEngine.startLearning() }
+        // Learning feeds the Space Switcher's previews and display layout
+        // memory; neither needs it while the feature is off.
+        Task { @MainActor in
+            if Defaults[.enableSpaceSwitcher] {
+                SpaceSwitcherEngine.startLearning()
+            }
+            for await enabled in Defaults.updates(.enableSpaceSwitcher) where enabled {
+                SpaceSwitcherEngine.startLearning()
+            }
+        }
 
         topologySubscription = SpaceTopology.shared.subscribe { [weak self] event in
             Task { @MainActor [weak self] in
@@ -272,6 +285,7 @@ final class SpaceSwitchingCoordinator {
             Task { @MainActor [weak self] in self?.moveWindow(windowID, to: space) }
         }
         self.state = state
+        onSessionBegin?()
 
         // First press advances off the current space, mirroring cmd+tab
         if Defaults[.spaceSwitcherStartOnSecondSpace] {

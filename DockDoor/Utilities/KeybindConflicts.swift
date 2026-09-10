@@ -51,6 +51,9 @@ enum KeybindConflicts {
     /// Validates a new Window Switcher primary shortcut; when the alternate key
     /// shares its modifier ("Same as main"), the alternate chord is checked too.
     static func validateWindowSwitcherKeybind(_ bind: UserKeyBind) -> String? {
+        if Defaults[.alternateKeybindModifierFlags] != 0, let alternate = alternateKeybind(primaryModifier: bind.modifierFlags), sameChord(bind, alternate) {
+            return String(localized: "The primary shortcut can't be the same as the alternate shortcut.", comment: "Keybind validation error")
+        }
         guard Defaults[.enableSpaceSwitcher] else { return nil }
         let space = Defaults[.spaceSwitcherKeybind]
         if sameChord(bind, space) {

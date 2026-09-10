@@ -200,10 +200,10 @@ enum SpaceSwitcherEngine {
             }
             guard let candidate = windowCandidate(from: entry, app: appsByPID[pid] ?? nil, cachedByID: cachedByID, includeAll: includeAll) else { continue }
 
-            var fresh = Array(spacesByWindow[candidate.wid] ?? [])
-            if fresh.isEmpty {
-                fresh = candidate.wid.cgsSpaces().filter { knownSpaceIDs.contains($0) }
-            }
+            // Both window-server views of the same fact, unioned: the per-Space
+            // fan-out omits a few helper surfaces the per-window query lists.
+            let fresh = (spacesByWindow[candidate.wid] ?? []).union(candidate.wid.cgsSpaces())
+                .filter { knownSpaceIDs.contains($0) }.sorted()
             guard let attribution = resolveAttribution(fresh: fresh) else { continue }
 
             // A minimized window is offscreen on a visible Space by definition;
