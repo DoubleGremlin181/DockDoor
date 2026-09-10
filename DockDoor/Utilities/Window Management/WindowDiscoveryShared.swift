@@ -507,6 +507,13 @@ func currentActiveSpaceIDs() -> Set<Int> {
 }
 
 enum WindowSpaces {
+    /// Every Space macOS currently manages on any display, for telling a window
+    /// on another Space apart from a ghost whose Spaces no longer exist.
+    static func allManagedSpaceIDs() -> Set<Int> {
+        let table = SpaceTopology.shared.spaces(maxAge: 1)
+        return Set(table.knownSpaceIDs.union(table.currentSpaceIDs).map { Int($0) })
+    }
+
     private static func screenContainingMouse(_ mouseLocation: CGPoint) -> NSScreen? {
         NSScreen.screens.first { screen in
             NSPointInRect(mouseLocation, screen.frame)
@@ -787,12 +794,9 @@ func shouldAcceptWindow(axWindow: AXUIElement,
         return true
     }
 
-    // Window on different Space — but reject if not onscreen and not minimized/fullscreen/hidden (ghost with stale space ID)
+    // Window on a different Space; a window whose only Spaces no longer exist is a ghost with a stale space ID
     if !windowSpaces.isEmpty, windowSpaces.isDisjoint(with: activeSpaceIDs) {
-        if !isOnscreen, !axIsMinimized, !axIsFullscreen, !app.isHidden {
-            return false
-        }
-        return true
+        return !windowSpaces.isDisjoint(with: WindowSpaces.allManagedSpaceIDs())
     }
 
     // Fallback: if AX marks it as main, consider it significant and include.

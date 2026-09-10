@@ -12,6 +12,7 @@ struct MainSettingsView: View {
     var body: some View {
         BaseSettingsView {
             VStack(alignment: .leading, spacing: 24) {
+                DockDoorProBanner()
                 supportAndContributionsSection
                 applicationBasicsSection
                 activeAppIndicatorSection
@@ -102,6 +103,7 @@ struct MainSettingsView: View {
                 Defaults[.dockPreviewActivationMode] = Defaults.Keys.dockPreviewActivationMode.defaultValue
                 Defaults[.dockPreviewActivationModifier] = Defaults.Keys.dockPreviewActivationModifier.defaultValue
                 Defaults[.previewHoverAction] = Defaults.Keys.previewHoverAction.defaultValue
+                Defaults[.keepPreviewOnHoverActivation] = Defaults.Keys.keepPreviewOnHoverActivation.defaultValue
 
                 showMenuBarIcon = Defaults.Keys.showMenuBarIcon.defaultValue
                 Defaults[.enableWindowSwitcher] = Defaults.Keys.enableWindowSwitcher.defaultValue
@@ -141,6 +143,7 @@ struct MainSettingsView: View {
                 Defaults[.cmdShortcut3Action] = Defaults.Keys.cmdShortcut3Action.defaultValue
 
                 Defaults[.alternateKeybindKey] = Defaults.Keys.alternateKeybindKey.defaultValue
+                Defaults[.alternateKeybindModifierFlags] = Defaults.Keys.alternateKeybindModifierFlags.defaultValue
                 Defaults[.alternateKeybindMode] = Defaults.Keys.alternateKeybindMode.defaultValue
 
                 Defaults[.cmdTabAutoSelectFirstWindow] = Defaults.Keys.cmdTabAutoSelectFirstWindow.defaultValue

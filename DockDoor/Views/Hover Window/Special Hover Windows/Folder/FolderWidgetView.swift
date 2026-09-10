@@ -416,7 +416,7 @@ private struct FolderWidgetListView: View {
         }
     }
 
-    private static func sort(_ items: [FolderWidgetItem], order: FolderWidgetSortOrder, reversed: Bool) -> [FolderWidgetItem] {
+    private nonisolated static func sort(_ items: [FolderWidgetItem], order: FolderWidgetSortOrder, reversed: Bool) -> [FolderWidgetItem] {
         var sorted = items.sorted { lhs, rhs in
             switch order {
             case .dateModified:
@@ -516,6 +516,9 @@ private struct FolderWidgetItemRow: View {
             withAnimation(showAnimations ? .snappy(duration: 0.175) : nil) {
                 isHovering = hovering
             }
+        }
+        .onDrag {
+            NSItemProvider(object: item.url as NSURL)
         }
     }
 

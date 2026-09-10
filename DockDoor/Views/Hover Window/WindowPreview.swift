@@ -21,6 +21,7 @@ struct PreviewAppearanceSettings: Equatable {
     let hidePreviewCardBackground: Bool
     let tapEquivalentInterval: Double
     let previewHoverAction: PreviewHoverAction
+    let keepPreviewOnHoverActivation: Bool
     let showActiveWindowBorder: Bool
     let activeAppIndicatorColor: Color
     let showAnimations: Bool
@@ -61,7 +62,7 @@ struct PreviewAppearanceSettings: Equatable {
         .dockLivePreviewQuality, .windowSwitcherLivePreviewQuality,
         .dockLivePreviewFrameRate, .windowSwitcherLivePreviewFrameRate,
         .showMinimizedHiddenLabels, .selectionOpacity, .unselectedContentOpacity, .hoverHighlightColor,
-        .allowDynamicImageSizing, .hidePreviewCardBackground, .tapEquivalentInterval, .previewHoverAction,
+        .allowDynamicImageSizing, .hidePreviewCardBackground, .tapEquivalentInterval, .previewHoverAction, .keepPreviewOnHoverActivation,
         .showActiveWindowBorder, .activeAppIndicatorColor, .showAnimations, .globalPaddingMultiplier,
         .windowTitleFontSize, .switcherAppIconSize, .trafficLightButtonScale,
         .previewWidth, .compactModeTitleFormat, .compactModeItemSize, .compactModeHideTrafficLights,
@@ -99,6 +100,7 @@ struct PreviewAppearanceSettings: Equatable {
             hidePreviewCardBackground: Defaults[.hidePreviewCardBackground],
             tapEquivalentInterval: Defaults[.tapEquivalentInterval],
             previewHoverAction: Defaults[.previewHoverAction],
+            keepPreviewOnHoverActivation: Defaults[.keepPreviewOnHoverActivation],
             showActiveWindowBorder: Defaults[.showActiveWindowBorder],
             activeAppIndicatorColor: Defaults[.activeAppIndicatorColor],
             showAnimations: Defaults[.showAnimations],
@@ -347,10 +349,10 @@ struct WindowPreview: View, Equatable {
                     .font(appearance.windowTitleFontSize.font)
                     .italic()
                     .foregroundStyle(.secondary)
+                    .frame(height: 17 * appearance.trafficLightButtonScale)
                     .padding(4)
                     .if(!appearance.disableDockStyleTitles) { view in
                         view.materialPill(backgroundAppearance: backgroundAppearance)
-                            .frame(height: 34)
                     }
             }
         }
@@ -608,10 +610,10 @@ struct WindowPreview: View, Equatable {
                     .font(appearance.windowTitleFontSize.font)
                     .italic()
                     .foregroundStyle(.secondary)
+                    .frame(height: 17)
                     .padding(4)
                     .if(!appearance.disableDockStyleTitles) { view in
                         view.materialPill(backgroundAppearance: backgroundAppearance)
-                            .frame(height: 34)
                     }
             }
         }
@@ -695,10 +697,10 @@ struct WindowPreview: View, Equatable {
                     .font(appearance.windowTitleFontSize.font)
                     .italic()
                     .foregroundStyle(.secondary)
+                    .frame(height: 17 * appearance.trafficLightButtonScale)
                     .padding(4)
                     .if(!appearance.disableDockStyleTitles) { view in
                         view.materialPill(backgroundAppearance: backgroundAppearance)
-                            .frame(height: 34)
                     }
             }
         }
@@ -910,14 +912,19 @@ struct WindowPreview: View, Equatable {
             )
             .fixedSize()
             .opacity(skeletonMode ? 0 : 1)
-            .allowsHitTesting(!skeletonMode)
+            .allowsHitTesting(!skeletonMode && !mockPreviewActive)
+            .onDisappear {
+                cancelFullPreviewHover()
+            }
     }
 
     private func cancelFullPreviewHover() {
         fullPreviewTimer?.invalidate()
         fullPreviewTimer = nil
+        if let hoverID = fullPreviewHoverID {
+            SharedPreviewWindowCoordinator.activeInstance?.cancelFullPreviewHover(hoverID)
+        }
         fullPreviewHoverID = nil
-        SharedPreviewWindowCoordinator.activeInstance?.hideFullPreviewWindow()
     }
 
     private func handleFullPreviewHover(isHovering: Bool, action: PreviewHoverAction) {
@@ -933,16 +940,18 @@ struct WindowPreview: View, Equatable {
                 }
 
             case .previewFullSize:
-                let hoverID = UUID()
+                guard let coordinator = SharedPreviewWindowCoordinator.activeInstance,
+                      let hoverID = coordinator.beginFullPreviewHover() else { return }
                 fullPreviewHoverID = hoverID
                 let showFullPreview = {
                     guard fullPreviewHoverID == hoverID else { return }
-                    SharedPreviewWindowCoordinator.activeInstance?.showWindow(
+                    coordinator.showWindow(
                         appName: windowInfo.app.localizedName ?? "Unknown",
                         windows: [windowInfo],
                         mouseScreen: bestGuessMonitor,
                         dockItemElement: nil, overrideDelay: true,
-                        centeredHoverWindowState: .fullWindowPreview
+                        centeredHoverWindowState: .fullWindowPreview,
+                        fullPreviewHoverID: hoverID
                     )
                 }
                 if appearance.tapEquivalentInterval == 0 {
@@ -965,7 +974,9 @@ struct WindowPreview: View, Equatable {
             handleWindowAction(.hide)
         } else {
             windowInfo.bringToFront()
-            onTap?()
+            if !appearance.keepPreviewOnHoverActivation {
+                onTap?()
+            }
         }
     }
 

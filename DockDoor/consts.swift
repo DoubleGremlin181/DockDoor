@@ -82,6 +82,7 @@ extension Defaults.Keys {
     static let preventPreviewReentryDuringFadeOut = Key<Bool>("preventPreviewReentryDuringFadeOut", default: false)
     static let inactivityTimeout = Key<CGFloat>("inactivityTimeout", default: 0.2)
     static let previewHoverAction = Key<PreviewHoverAction>("previewHoverAction", default: .none)
+    static let keepPreviewOnHoverActivation = Key<Bool>("keepPreviewOnHoverActivation", default: false)
     static let aeroShakeAction = Key<AeroShakeAction>("aeroShakeAction", default: .none)
 
     static let showSpecialAppControls = Key<Bool>("showSpecialAppControls", default: true)
@@ -350,9 +351,10 @@ extension Defaults.Keys {
 
     static let windowSwitcherSelectionKeyCode = Key<UInt16>("windowSwitcherSelectionKeyCode", default: UInt16(kVK_Return))
 
-    // MARK: - Alternate Window Switcher Keybind (shares modifier with primary keybind)
+    // MARK: - Alternate Window Switcher Keybind (modifier 0 = same as primary keybind)
 
     static let alternateKeybindKey = Key<UInt16>("alternateKeybindKey", default: 0)
+    static let alternateKeybindModifierFlags = Key<Int>("alternateKeybindModifierFlags", default: 0)
     static let alternateKeybindMode = Key<SwitcherInvocationMode>("alternateKeybindMode", default: .activeAppOnly)
 }
 

@@ -13,6 +13,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var activeAppIndicator: ActiveAppIndicatorCoordinator?
     private var dockLocker: DockLocker?
     private var statusBarItem: NSStatusItem?
+    private let windowActionsMenu = WindowActionsMenuController()
     private var updaterController: SPUStandardUpdaterController
     @ObservedObject var updaterState: UpdaterState
 
@@ -20,6 +21,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         updaterController.updater
     }
 
+    #if DEBUG
+        private var debugHarness: DebugTestHarness?
+    #endif
     private var cinematicOverlay: CinematicOverlay?
     private var onboardingWindow: NSWindow?
     private var settingsManager: SettingsManager?
@@ -46,10 +50,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Set global AX timeout to prevent hangs from unresponsive apps
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
 
-        NSWorkspace.shared.notificationCenter.addObserver(
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(handleSystemWake),
+                name: name,
+                object: nil
+            )
+        }
+        NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleSystemWake),
-            name: NSWorkspace.didWakeNotification,
+            selector: #selector(handleScreenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
 
@@ -84,6 +96,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 activeAppIndicator = ActiveAppIndicatorCoordinator()
             }
 
+            NSScreen.migrateScreenIdentifier(.lockedDockScreenIdentifier)
+            NSScreen.migrateScreenIdentifier(.pinnedScreenIdentifier)
             if Defaults[.enableDockLocking] {
                 dockLocker = DockLocker()
             }
@@ -112,6 +126,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Defaults[.reopenSettingsAfterRestart] = false
             openSettingsWindow(nil)
         }
+
+        #if DEBUG
+            debugHarness = DebugTestHarness(hooks: .init(
+                simulateWake: { [weak self] in self?.handleSystemWake() },
+                resetKeybind: { [weak self] in self?.keybindHelper?.reset() },
+                switcherSessionActive: { [weak self] in self?.previewCoordinator?.windowSwitcherCoordinator.isKeybindSessionActive ?? false },
+                previewVisible: { [weak self] in self?.previewCoordinator?.isVisible ?? false },
+                previewWindowCount: { [weak self] in self?.previewCoordinator?.windowSwitcherCoordinator.windows.count ?? 0 }
+            ))
+        #endif
     }
 
     // Clear the onboarding skip's disableImagePreview only when permission was newly granted since last launch, so skip-then-grant users get previews back without overriding a deliberate "Always use compact mode" choice.
@@ -161,8 +185,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: String(localized: "Open Settings"), action: #selector(openSettingsWindow(_:)), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
+        let actionsItem = NSMenuItem(title: windowActionsMenu.menu.title, action: nil, keyEquivalent: "")
+        actionsItem.submenu = windowActionsMenu.menu
+        menu.addItem(actionsItem)
+        menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: String(localized: "Check for Updates…"), action: #selector(checkForUpdatesWrapper), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: String(localized: "Support DockDoor"), action: #selector(openDonationPage), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: String(localized: "Get DockDoor Pro…"), action: #selector(openProPage), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: String(localized: "Leave a Review"), action: #selector(openReviewPage), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: String(localized: "Restart DockDoor"), action: #selector(restartAppWrapper), keyEquivalent: ""))
@@ -200,6 +229,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func openProPage() {
+        DockDoorPro.open()
+    }
+
     @objc private func openReviewPage() {
         if let url = URL(string: "https://www.producthunt.com/products/dockdoor/reviews") {
             NSWorkspace.shared.open(url)
@@ -207,6 +240,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var wakeRecoveryTask: Task<Void, Never>?
+    private var screenParametersDebounce: DispatchWorkItem?
+
+    @objc private func handleScreenParametersChanged() {
+        screenParametersDebounce?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in self?.handleSystemWake() }
+        screenParametersDebounce = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: workItem)
+    }
 
     @objc private func handleSystemWake() {
         wakeRecoveryTask?.cancel()
@@ -235,7 +276,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 dockObserver?.reset()
-                keybindHelper?.reset()
+                keybindHelper?.recover()
                 appClosureObserver?.reset()
                 dockLocker?.reset()
             }

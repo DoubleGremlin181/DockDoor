@@ -10,6 +10,7 @@ struct KeyCaptureButton: View {
     /// When provided, the refusal reason is published here for the parent to
     /// render (keeps the button in line with its row); otherwise it is shown inline.
     var error: Binding<String?>?
+    var allowsEscape: Bool = false
 
     @State private var isCapturing = false
     @State private var monitors: [Any] = []
@@ -92,7 +93,7 @@ struct KeyCaptureButton: View {
         isCapturing = true
 
         monitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == UInt16(kVK_Escape) {
+            if event.keyCode == UInt16(kVK_Escape), !allowsEscape {
                 stopCapture()
                 return nil
             }

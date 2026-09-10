@@ -234,6 +234,15 @@ enum SettingsSearchCatalog {
             icon: "cursorarrow.click"
         ),
         SettingsSearchItem(
+            id: "dockPreviews.keepOnHoverActivation",
+            title: String(localized: "Keep preview open after hover activation"),
+            description: String(localized: "Keep Dock previews visible while the pointer remains over them after a hover brings a window to the front."),
+            keywords: ["hover", "activate", "front", "keep", "preview", "windows"],
+            tab: "DockPreviews",
+            section: String(localized: "Dock Interaction"),
+            icon: "rectangle.on.rectangle"
+        ),
+        SettingsSearchItem(
             id: "dockPreviews.hoverDelay",
             title: String(localized: "Preview Hover Action Delay"),
             keywords: ["delay", "tap", "interval"],
@@ -1552,8 +1561,8 @@ enum SettingsSearchCatalog {
         SettingsSearchItem(
             id: "gestures.alternateShortcut",
             title: String(localized: "Alternate Shortcut"),
-            description: String(localized: "An additional trigger key using the same modifier, invoking the switcher with a different filter mode."),
-            keywords: ["alternate", "shortcut", "trigger", "mode"],
+            description: String(localized: "An additional trigger key, with its own modifier if desired, invoking the switcher with a different filter mode."),
+            keywords: ["alternate", "shortcut", "trigger", "mode", "modifier", "escape"],
             tab: "GesturesKeybinds",
             section: String(localized: "Window Switcher Shortcuts"),
             icon: "keyboard"

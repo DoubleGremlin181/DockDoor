@@ -14,9 +14,26 @@ enum KeybindConflicts {
     static func windowSwitcherClaims(_ bind: UserKeyBind) -> Bool {
         guard Defaults[.enableWindowSwitcher] else { return false }
         let primary = Defaults[.UserKeybind]
-        guard bind.modifierFlags == primary.modifierFlags else { return false }
-        let alternate = Defaults[.alternateKeybindKey]
-        return bind.keyCode == primary.keyCode || (alternate != 0 && bind.keyCode == alternate)
+        if sameChord(bind, primary) {
+            return true
+        }
+        if let alternate = alternateKeybind(primaryModifier: primary.modifierFlags) {
+            return sameChord(bind, alternate)
+        }
+        return false
+    }
+
+    /// The alternate shortcut as a full chord: its own modifier when set,
+    /// otherwise the Window Switcher's primary modifier.
+    static func alternateKeybind(primaryModifier: Int = Defaults[.UserKeybind].modifierFlags) -> UserKeyBind? {
+        let key = Defaults[.alternateKeybindKey]
+        guard key != 0 else { return nil }
+        return UserKeyBind(keyCode: key, modifierFlags: effectiveAlternateModifier(primaryModifier: primaryModifier))
+    }
+
+    static func effectiveAlternateModifier(primaryModifier: Int = Defaults[.UserKeybind].modifierFlags) -> Int {
+        let modifier = Defaults[.alternateKeybindModifierFlags]
+        return modifier == 0 ? primaryModifier : modifier
     }
 
     // MARK: - Shortcut validation (nil = accepted)
@@ -31,32 +48,41 @@ enum KeybindConflicts {
         return nil
     }
 
-    /// Validates a new Window Switcher primary shortcut; the alternate key shares
-    /// its modifier, so the alternate chord is checked too.
+    /// Validates a new Window Switcher primary shortcut; when the alternate key
+    /// shares its modifier ("Same as main"), the alternate chord is checked too.
     static func validateWindowSwitcherKeybind(_ bind: UserKeyBind) -> String? {
         guard Defaults[.enableSpaceSwitcher] else { return nil }
         let space = Defaults[.spaceSwitcherKeybind]
         if sameChord(bind, space) {
             return String(localized: "\(describe(bind)) is already used by the Space Switcher. Choose a different shortcut.", comment: "Keybind validation error")
         }
-        let alternate = Defaults[.alternateKeybindKey]
-        if alternate != 0, sameChord(UserKeyBind(keyCode: alternate, modifierFlags: bind.modifierFlags), space) {
+        if Defaults[.alternateKeybindModifierFlags] == 0,
+           let alternate = alternateKeybind(primaryModifier: bind.modifierFlags), sameChord(alternate, space)
+        {
             return String(localized: "With this modifier the alternate shortcut \(describe(space)) would collide with the Space Switcher. Change the alternate key first.", comment: "Keybind validation error")
         }
         return nil
     }
 
-    /// The alternate key shares the Window Switcher's modifier.
+    /// `modifier` is the alternate shortcut's effective modifier (its own, or the
+    /// Window Switcher's when set to "Same as main").
     static func validateAlternateKey(_ key: UInt16, modifier: Int) -> String? {
         guard key != 0 else { return nil }
         let bind = UserKeyBind(keyCode: key, modifierFlags: modifier)
-        if key == Defaults[.UserKeybind].keyCode {
-            return String(localized: "The alternate key can't be the same as the primary shortcut key.", comment: "Keybind validation error")
+        if sameChord(bind, Defaults[.UserKeybind]) {
+            return String(localized: "The alternate shortcut can't be the same as the primary shortcut.", comment: "Keybind validation error")
         }
         if Defaults[.enableSpaceSwitcher], sameChord(bind, Defaults[.spaceSwitcherKeybind]) {
             return String(localized: "\(describe(bind)) is already used by the Space Switcher. Choose a different key.", comment: "Keybind validation error")
         }
         return nil
+    }
+
+    /// Changing the alternate shortcut's modifier while a key is set.
+    static func validateAlternateModifier(_ modifier: Int, primaryModifier: Int) -> String? {
+        let key = Defaults[.alternateKeybindKey]
+        guard key != 0 else { return nil }
+        return validateAlternateKey(key, modifier: modifier == 0 ? primaryModifier : modifier)
     }
 
     /// Keys the Space Switcher consumes while a session is open.

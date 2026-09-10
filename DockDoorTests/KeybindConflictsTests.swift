@@ -9,7 +9,7 @@ private func withDefaults(_ apply: () -> Void, _ body: () throws -> Void) rethro
         Defaults[.enableWindowSwitcher], Defaults[.enableSpaceSwitcher], Defaults[.enableCmdTabEnhancements],
         Defaults[.UserKeybind], Defaults[.alternateKeybindKey], Defaults[.spaceSwitcherKeybind],
         Defaults[.spaceSwitcherMoveWindowKeyCode], Defaults[.windowSwitcherSelectionKeyCode],
-        Defaults[.switcherBackwardKeyCode], Defaults[.enableVimMotions]
+        Defaults[.switcherBackwardKeyCode], Defaults[.enableVimMotions], Defaults[.alternateKeybindModifierFlags]
     )
     defer {
         Defaults[.enableWindowSwitcher] = snapshot.0
@@ -22,6 +22,7 @@ private func withDefaults(_ apply: () -> Void, _ body: () throws -> Void) rethro
         Defaults[.windowSwitcherSelectionKeyCode] = snapshot.7
         Defaults[.switcherBackwardKeyCode] = snapshot.8
         Defaults[.enableVimMotions] = snapshot.9
+        Defaults[.alternateKeybindModifierFlags] = snapshot.10
     }
     // Baseline: Window Switcher on ⌘Tab, Space Switcher on ⌥Tab, no alternate, no Cmd+Tab enhancements.
     Defaults[.enableWindowSwitcher] = true
@@ -29,6 +30,7 @@ private func withDefaults(_ apply: () -> Void, _ body: () throws -> Void) rethro
     Defaults[.enableCmdTabEnhancements] = false
     Defaults[.UserKeybind] = cmdTab
     Defaults[.alternateKeybindKey] = 0
+    Defaults[.alternateKeybindModifierFlags] = 0
     Defaults[.spaceSwitcherKeybind] = optTab
     Defaults[.spaceSwitcherMoveWindowKeyCode] = UInt16(kVK_ANSI_M)
     Defaults[.windowSwitcherSelectionKeyCode] = UInt16(kVK_Return)
@@ -103,6 +105,28 @@ struct KeybindConflictsTests {
             #expect(KeybindConflicts.validateAlternateKey(tab, modifier: Defaults[.Int64maskAlternate]) != nil)
             #expect(KeybindConflicts.validateAlternateKey(UInt16(kVK_ANSI_Q), modifier: Defaults[.Int64maskAlternate]) == nil)
             #expect(KeybindConflicts.validateAlternateKey(UInt16(kVK_ANSI_Grave), modifier: Defaults[.Int64maskAlternate]) != nil, "same as primary key")
+        }
+    }
+
+    @Test func alternateKeyWithOwnModifierClaimsThatChordOnly() {
+        withDefaults({
+            Defaults[.alternateKeybindKey] = UInt16(kVK_ANSI_Grave)
+            Defaults[.alternateKeybindModifierFlags] = Defaults[.Int64maskControl]
+        }) {
+            let ctrlGrave = UserKeyBind(keyCode: UInt16(kVK_ANSI_Grave), modifierFlags: Defaults[.Int64maskControl])
+            let cmdGrave = UserKeyBind(keyCode: UInt16(kVK_ANSI_Grave), modifierFlags: Defaults[.Int64maskCommand])
+            #expect(KeybindConflicts.windowSwitcherClaims(ctrlGrave))
+            #expect(!KeybindConflicts.windowSwitcherClaims(cmdGrave), "the primary modifier no longer applies to the alternate key")
+            #expect(KeybindConflicts.validateSpaceSwitcherKeybind(ctrlGrave) != nil)
+            #expect(KeybindConflicts.validateSpaceSwitcherKeybind(cmdGrave) == nil)
+        }
+    }
+
+    @Test func alternateModifierChangeRejectedWhenItCollidesWithSpaceBind() {
+        withDefaults({ Defaults[.alternateKeybindKey] = tab }) {
+            #expect(KeybindConflicts.validateAlternateModifier(Defaults[.Int64maskAlternate], primaryModifier: Defaults[.Int64maskCommand]) != nil, "⌥Tab is the Space bind")
+            #expect(KeybindConflicts.validateAlternateModifier(Defaults[.Int64maskControl], primaryModifier: Defaults[.Int64maskCommand]) == nil)
+            #expect(KeybindConflicts.validateAlternateModifier(0, primaryModifier: Defaults[.Int64maskCommand]) != nil, "same as main makes ⌘Tab, the primary shortcut")
         }
     }
 
