@@ -1,3 +1,4 @@
+import AppKit
 @testable import DockDoor
 import Testing
 
@@ -10,6 +11,16 @@ struct SwitcherScreenPlacementTests {
 
     @Test func lastActiveWindowDeferredWhenNotResolvedHere() {
         #expect(SwitcherScreenPlacement.resolve(strategy: .screenWithLastActiveWindow, pinnedIdentifier: "", resolveLastActiveWindow: false) == nil)
+    }
+
+    @Test func systemMainIdentifierResolvesToFirstScreen() {
+        #expect(SwitcherScreenPlacement.resolve(strategy: .pinnedToScreen, pinnedIdentifier: NSScreen.systemMainDisplayIdentifier, resolveLastActiveWindow: false) == NSScreen.screens.first)
+    }
+
+    @Test func legacyPinnedIdentifierStillResolves() {
+        guard let screen = NSScreen.screens.first else { return }
+        #expect(SwitcherScreenPlacement.resolve(strategy: .pinnedToScreen, pinnedIdentifier: screen.legacyIdentifier(), resolveLastActiveWindow: false) == screen)
+        #expect(SwitcherScreenPlacement.resolve(strategy: .pinnedToScreen, pinnedIdentifier: screen.uniqueIdentifier(), resolveLastActiveWindow: false) == screen)
     }
 
     @Test func unknownPinnedIdentifierFallsThrough() {

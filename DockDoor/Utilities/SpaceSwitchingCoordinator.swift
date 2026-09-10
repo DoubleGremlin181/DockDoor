@@ -78,11 +78,28 @@ final class SpaceSwitchingCoordinator {
         state != nil
     }
 
-    /// Read from the event tap thread for click-outside dismissal; NSPanel frame
-    /// reads off-main match the existing pattern in KeybindHelper's mouse handler.
-    var visiblePanelFrame: NSRect? {
-        guard let panel, panel.isVisible else { return nil }
-        return panel.frame
+    private let tapPanelFrameLock = NSLock()
+    private var currentTapPanelFrame: CGRect?
+
+    /// The visible panel's frame in Quartz (top-left origin) coordinates, for
+    /// the event tap thread's click-outside test. Published from the main
+    /// thread when the panel shows and cleared when the session ends, so the
+    /// tap never touches the NSPanel itself (the tap runs on its own thread).
+    var tapPanelFrame: CGRect? {
+        tapPanelFrameLock.lock()
+        defer { tapPanelFrameLock.unlock() }
+        return currentTapPanelFrame
+    }
+
+    @MainActor
+    private func publishTapPanelFrame() {
+        var frame: CGRect?
+        if let panel, panel.isVisible, let primaryMaxY = NSScreen.screens.first?.frame.maxY {
+            frame = panel.frame.flippedToQuartz(primaryScreenMaxY: primaryMaxY)
+        }
+        tapPanelFrameLock.lock()
+        currentTapPanelFrame = frame
+        tapPanelFrameLock.unlock()
     }
 
     /// Thumbnails being captured ahead of a session — started when the
@@ -284,6 +301,7 @@ final class SpaceSwitchingCoordinator {
         let panel = SpaceSwitcherPanelCoordinator()
         self.panel = panel
         panel.show(state: state, on: screen)
+        publishTapPanelFrame()
         // Captures still running keep landing in the panel via the prewarm
         // task; a cached pass that has gone stale is redone behind the panel.
         if prewarm.isComplete, prewarmAge > Self.prewarmStaleAge {
@@ -370,6 +388,7 @@ final class SpaceSwitchingCoordinator {
         panel?.hide()
         panel?.close()
         panel = nil
+        publishTapPanelFrame()
         state = nil
         onSessionEnd?()
     }
@@ -455,8 +474,9 @@ final class SpaceSwitchingCoordinator {
 
     /// Fresh capture of one window: full-resolution copy into the shared
     /// cache (dock previews and the next open seed from it), downsampled
-    /// copy for the tile. nil when capture fails or returns a corrupt sliver
-    /// (seen with Chrome windows whose AX bridge has died).
+    /// copy for the tile. nil when capture fails, returns a corrupt sliver
+    /// (seen with Chrome windows whose AX bridge has died), or is cropped by a
+    /// Space transition in progress, so the last good tile survives.
     private static func captureThumbnail(_ window: SpaceSwitcherEngine.SpaceWindow, cap: CGFloat) -> CGImage? {
         var windowID = UInt32(window.id)
         let quality: CGSWindowCaptureOptions = Defaults[.windowImageCaptureQuality] == .best ? .bestResolution : .nominalResolution
@@ -464,6 +484,12 @@ final class SpaceSwitchingCoordinator {
               let image = images.first,
               image.width >= WindowUtil.minUsableImageDimension, image.height >= WindowUtil.minUsableImageDimension
         else { return nil }
+        let entry = (CGWindowListCopyWindowInfo(.optionIncludingWindow, window.id) as? [[String: AnyObject]])?.first
+        let bounds = entry.flatMap { CGRect(cgWindowBounds: $0[kCGWindowBounds as String]) }
+        if WindowUtil.isClippedBySpaceTransition(image, bounds: bounds, windowID: window.id) {
+            DebugLogger.log("SpaceSwitcher", details: "capture clipped by Space transition, keeping previous tile: window \(window.id)")
+            return nil
+        }
         // The cache is keyed by the display app's pid, which can differ from
         // the CGS owner for helper-owned windows; windows with no cache entry
         // have nothing to update.

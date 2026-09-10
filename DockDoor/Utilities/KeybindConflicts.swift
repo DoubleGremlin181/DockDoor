@@ -93,7 +93,7 @@ enum KeybindConflicts {
         if key == UInt16(kVK_Escape) {
             return String(localized: "Escape always dismisses the switcher.", comment: "Keybind validation error")
         }
-        if key == Defaults[.windowSwitcherSelectionKeyCode] || key == UInt16(kVK_ANSI_KeypadEnter) {
+        if key == Defaults[.windowSwitcherSelectionKeyCode] || key == UInt16(kVK_Return) || key == UInt16(kVK_ANSI_KeypadEnter) {
             return String(localized: "That key is the Selection Key.", comment: "Keybind validation error")
         }
         if key == Defaults[.switcherBackwardKeyCode], !isModifierKeyCode(key) {

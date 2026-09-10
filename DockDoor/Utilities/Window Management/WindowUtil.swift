@@ -609,7 +609,10 @@ extension WindowUtil {
         return cgImage
     }
 
-    private static func isClippedBySpaceTransition(_ image: CGImage, bounds: CGRect?, windowID: CGWindowID) -> Bool {
+    /// A capture taken mid Space transition comes back cropped: the image's
+    /// aspect no longer matches the window's bounds and the window is not on
+    /// an active Space. Shared with the Space Switcher's thumbnail refresh.
+    static func isClippedBySpaceTransition(_ image: CGImage, bounds: CGRect?, windowID: CGWindowID) -> Bool {
         guard let bounds, bounds.width > 0, bounds.height > 0, image.height > 0 else { return false }
         let imageAspect = CGFloat(image.width) / CGFloat(image.height)
         let boundsAspect = bounds.width / bounds.height

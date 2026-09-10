@@ -556,15 +556,21 @@ enum WindowSpaces {
 
     /// True while Mission Control (or App Exposé) is showing: the Dock then owns
     /// screen-sized on-screen windows at layer 18, which never exist otherwise.
+    /// Called from the event tap thread as well as main, so display sizes come
+    /// from CoreGraphics rather than NSScreen.
     static func isMissionControlActive() -> Bool {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
             return false
         }
+        var displayCount: UInt32 = 0
+        var displayIDs = [CGDirectDisplayID](repeating: 0, count: 16)
+        CGGetActiveDisplayList(UInt32(displayIDs.count), &displayIDs, &displayCount)
+        let displaySizes = displayIDs.prefix(Int(displayCount)).map { CGDisplayBounds($0).size }
         for window in list where (window[kCGWindowOwnerName as String] as? String) == "Dock" {
             guard (window[kCGWindowLayer as String] as? Int) == 18,
                   let bounds = CGRect(cgWindowBounds: window[kCGWindowBounds as String] as AnyObject?)
             else { continue }
-            if NSScreen.screens.contains(where: { abs($0.frame.width - bounds.width) < 2 && abs($0.frame.height - bounds.height) < 2 }) {
+            if displaySizes.contains(where: { abs($0.width - bounds.width) < 2 && abs($0.height - bounds.height) < 2 }) {
                 return true
             }
         }

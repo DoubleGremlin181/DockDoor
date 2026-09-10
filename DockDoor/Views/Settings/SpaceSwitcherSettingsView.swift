@@ -210,20 +210,22 @@ struct SpaceSwitcherSettingsView: View {
 
                 if placementStrategy == .pinnedToScreen {
                     Picker("Pin to", selection: $pinnedScreenIdentifier) {
+                        Text("System Main Display").tag(NSScreen.systemMainDisplayIdentifier)
                         ForEach(NSScreen.screens, id: \.self) { screen in
                             Text(screen.displayName).tag(screen.uniqueIdentifier())
                         }
                         if !pinnedScreenIdentifier.isEmpty,
-                           !NSScreen.screens.contains(where: { $0.uniqueIdentifier() == pinnedScreenIdentifier })
+                           NSScreen.findScreen(byIdentifier: pinnedScreenIdentifier) == nil
                         {
                             Text("Disconnected Display").tag(pinnedScreenIdentifier)
                         }
                     }
                     .pickerStyle(.menu)
                     .padding(.leading, 20)
+                    .onAppear { NSScreen.migrateScreenIdentifier(.spaceSwitcherPinnedScreenIdentifier) }
 
                     if !pinnedScreenIdentifier.isEmpty,
-                       !NSScreen.screens.contains(where: { $0.uniqueIdentifier() == pinnedScreenIdentifier })
+                       NSScreen.findScreen(byIdentifier: pinnedScreenIdentifier) == nil
                     {
                         Text("This display is currently disconnected.")
                             .font(.caption)

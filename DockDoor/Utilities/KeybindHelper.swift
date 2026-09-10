@@ -787,12 +787,7 @@ class KeybindHelper {
                 // NSEvent.mouseLocation: for synthetic clicks the hardware cursor
                 // may not have moved to the click point yet.
                 let clickCG = event.location
-                var insidePanel = false
-                if let panelFrame = spaceSwitchingCoordinator.visiblePanelFrame,
-                   let primaryMaxY = NSScreen.screens.first?.frame.maxY
-                {
-                    insidePanel = panelFrame.flippedToQuartz(primaryScreenMaxY: primaryMaxY).contains(clickCG)
-                }
+                let insidePanel = spaceSwitchingCoordinator.tapPanelFrame?.contains(clickCG) ?? false
                 if !insidePanel {
                     spaceSwitcherSessionActive = false
                     Task { @MainActor in
@@ -1462,8 +1457,8 @@ class KeybindHelper {
             })
         }
 
-        // Shared Selection Key (Return by default); keypad Enter always commits.
-        if keyCode == Int64(Defaults[.windowSwitcherSelectionKeyCode]) || keyCode == Int64(kVK_ANSI_KeypadEnter) {
+        // Shared Selection Key; Return and keypad Enter always commit, as in the Window Switcher.
+        if keyCode == Int64(Defaults[.windowSwitcherSelectionKeyCode]) || keyCode == Int64(kVK_Return) || keyCode == Int64(kVK_ANSI_KeypadEnter) {
             spaceSwitcherSessionActive = false
             return (true, { @MainActor in
                 self.hasProcessedSpaceModifierRelease = true
