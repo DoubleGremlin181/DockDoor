@@ -47,6 +47,7 @@ class MouseTrackingNSView: NSView {
     private let fadeOutDuration: TimeInterval
     private var inactivityCheckTimer: Timer?
     private let inactivityCheckInterval: TimeInterval
+    private let dockIconRect: CGRect?
 
     init(appName: String, bestGuessMonitor: NSScreen, dockPosition: DockPosition, dockItemElement: AXUIElement?, dockItemFrameOverride: CGRect? = nil, originalMouseLocation: CGPoint? = nil, minimizeAllWindowsCallback: @escaping (_ wasAppActiveBeforeClick: Bool) -> Void, frame frameRect: NSRect = .zero) {
         self.appName = appName
@@ -58,6 +59,7 @@ class MouseTrackingNSView: NSView {
         self.minimizeAllWindowsCallback = minimizeAllWindowsCallback
         fadeOutDuration = Defaults[.fadeOutDuration]
         inactivityCheckInterval = TimeInterval(Defaults[.inactivityTimeout])
+        dockIconRect = Self.appKitIconRect(for: dockItemElement, dockPosition: dockPosition, screen: bestGuessMonitor)
         super.init(frame: frameRect)
         setupTrackingArea()
         startInactivityMonitoring()
@@ -95,8 +97,9 @@ class MouseTrackingNSView: NSView {
             let windowFrame = window.frame.insetBy(dx: HoverContainerPadding.container, dy: HoverContainerPadding.container)
 
             let isMouseOverDockIcon = checkIfMouseIsOverDockIcon()
+            let isInBridge = bridgeRect(insetFrame: windowFrame)?.contains(currentMouseLocation) ?? false
 
-            if windowFrame.contains(currentMouseLocation) || isMouseOverDockIcon {
+            if windowFrame.contains(currentMouseLocation) || isInBridge || isMouseOverDockIcon {
                 resetOpacityVisually()
             } else {
                 if fadeOutTimer == nil, window.alphaValue == 1.0 {
@@ -104,6 +107,31 @@ class MouseTrackingNSView: NSView {
                 }
             }
         }
+    }
+
+    private static func appKitIconRect(for element: AXUIElement?, dockPosition: DockPosition, screen: NSScreen) -> CGRect? {
+        guard [.bottom, .left, .right, .top].contains(dockPosition),
+              let element,
+              let position = try? element.position(),
+              let size = try? element.size()
+        else { return nil }
+        let top = DockObserver.cgPointFromNSPoint(position, forScreen: screen).y
+        return CGRect(x: position.x, y: top - size.height, width: size.width, height: size.height)
+    }
+
+    private func bridgeRect(insetFrame: CGRect) -> CGRect? {
+        // The Dock stops reporting the icon as selected before the cursor is 24pt inside
+        // the window, so the strip between the icon and the inner rect counts as inside.
+        guard let icon = dockIconRect else { return nil }
+        let edge: CGRect
+        switch dockPosition {
+        case .bottom: edge = CGRect(x: icon.minX, y: insetFrame.minY, width: icon.width, height: 1)
+        case .top: edge = CGRect(x: icon.minX, y: insetFrame.maxY - 1, width: icon.width, height: 1)
+        case .left: edge = CGRect(x: insetFrame.minX, y: icon.minY, width: 1, height: icon.height)
+        case .right: edge = CGRect(x: insetFrame.maxX - 1, y: icon.minY, width: 1, height: icon.height)
+        default: return nil
+        }
+        return icon.union(edge)
     }
 
     private func checkIfMouseIsOverDockIcon() -> Bool {

@@ -33,6 +33,7 @@ final class SharedPreviewWindowCoordinator: NSPanel {
     private var currentDockPosition: DockPosition = .bottom
 
     private var anchoredDockItem: (element: AXUIElement, iconRect: CGRect)?
+    private var displayedFolderURL: URL?
     private var switcherAnchorCenter: CGPoint?
 
     private(set) var hasScreenRecordingPermission: Bool = PermissionsChecker.hasScreenRecordingPermission()
@@ -198,6 +199,7 @@ final class SharedPreviewWindowCoordinator: NSPanel {
         currentlyDisplayedPID = nil
         mouseIsWithinPreviewWindow = false
         anchoredDockItem = nil
+        displayedFolderURL = nil
         switcherAnchorCenter = nil
 
         let currentDockPos = DockUtils.getDockPosition()
@@ -716,6 +718,7 @@ final class SharedPreviewWindowCoordinator: NSPanel {
         let elapsed = renderStartTime.map { (CFAbsoluteTimeGetCurrent() - $0) * 1000 } ?? 0
         DebugLogger.log("PreviewRender", details: "performDisplay start (+\(String(format: "%.1f", elapsed))ms)")
 
+        displayedFolderURL = nil
         var dockIconRect: CGRect?
         if let dockItemElement,
            let pos = try? dockItemElement.position(),
@@ -1000,6 +1003,15 @@ final class SharedPreviewWindowCoordinator: NSPanel {
         let delay = shouldSkipDelay ? 0 : Defaults[.hoverWindowOpenDelay]
 
         pendingShowWorkItem?.cancel()
+
+        // The Dock re-posts selection changes for an item that is already hovered;
+        // rebuilding the panel for those replays the slide-in and reloads the list.
+        if isVisible, displayedFolderURL == folderURL,
+           let dockItemElement, anchoredDockItem?.element == dockItemElement
+        {
+            return
+        }
+
         let workItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
 
@@ -1052,6 +1064,7 @@ final class SharedPreviewWindowCoordinator: NSPanel {
                     dockIconRect: dockIconRect,
                     dockPositionOverride: activeDockPosition
                 )
+                displayedFolderURL = folderURL
 
                 dockManager.preventDockHiding(false)
             }
