@@ -65,7 +65,14 @@ final class DockObserver {
 
     private var currentDockPID: pid_t?
     private var healthCheckTimer: Timer?
+    private static let postingCanarySubtype: Int16 = 0x0D0D
+    private(set) static var canPostEvents = true
+    private var postingCanaryMonitor: Any?
+    private var postingCanaryPending = false
+    private var postingCanaryMisses = 0
     private var subscribedDockList: AXUIElement?
+    private var accessibilityPromptShown = false
+    private var awaitingAccessibilityGrant = false
 
     // Cmd+Tab switcher monitoring (accessed from extension file)
     var cmdTabObserver: AXObserver?
@@ -133,6 +140,11 @@ final class DockObserver {
     init(previewCoordinator: SharedPreviewWindowCoordinator) {
         self.previewCoordinator = previewCoordinator
         DockObserver.activeInstance = self
+        postingCanaryMonitor = NSEvent.addLocalMonitorForEvents(matching: .applicationDefined) { [weak self] event in
+            guard event.subtype.rawValue == DockObserver.postingCanarySubtype else { return event }
+            self?.postingCanaryArrived()
+            return nil
+        }
         setupSelectedDockItemObserver()
         startHealthCheckTimer()
         enableDockClickDetection()
@@ -141,6 +153,9 @@ final class DockObserver {
     deinit {
         if DockObserver.activeInstance === self {
             DockObserver.activeInstance = nil
+        }
+        if let postingCanaryMonitor {
+            NSEvent.removeMonitor(postingCanaryMonitor)
         }
         healthCheckTimer?.invalidate()
         teardownObserver()
@@ -165,6 +180,31 @@ final class DockObserver {
     }
 
     private func performHealthCheck() {
+        if awaitingAccessibilityGrant, AXIsProcessTrusted() {
+            awaitingAccessibilityGrant = false
+            askUserToRestartApplication()
+            return
+        }
+
+        if postingCanaryPending {
+            postingCanaryMisses += 1
+            if postingCanaryMisses >= 2, DockObserver.canPostEvents {
+                updateCanPostEvents(false)
+            }
+        }
+        postingCanaryPending = true
+        NSEvent.otherEvent(
+            with: .applicationDefined,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: DockObserver.postingCanarySubtype,
+            data1: 0,
+            data2: 0
+        )?.cgEvent?.postToPid(getpid())
+
         guard let currentDockPID else {
             setupSelectedDockItemObserver()
             return
@@ -210,6 +250,20 @@ final class DockObserver {
         }
     }
 
+    private func postingCanaryArrived() {
+        postingCanaryPending = false
+        postingCanaryMisses = 0
+        if !DockObserver.canPostEvents {
+            updateCanPostEvents(true)
+        }
+    }
+
+    private func updateCanPostEvents(_ canPostEvents: Bool) {
+        DockObserver.canPostEvents = canPostEvents
+        DebugLogger.log("DockObserver", details: "Event posting \(canPostEvents ? "allowed" : "refused"), rebuilding event taps")
+        (NSApp.delegate as? AppDelegate)?.recoverObserversAndTaps()
+    }
+
     private func teardownObserver() {
         if let observer = axObserver {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .commonModes)
@@ -225,22 +279,25 @@ final class DockObserver {
         }
 
         let dockAppPID = dockApp.processIdentifier
-        currentDockPID = dockAppPID
-
         let dockAppElement = AXUIElementCreateApplication(dockAppPID)
 
         guard AXIsProcessTrusted() else {
+            // The health check retries setup every 5 seconds until trusted; show the prompt once per launch.
+            awaitingAccessibilityGrant = true
+            guard !accessibilityPromptShown else { return }
+            accessibilityPromptShown = true
             MessageUtil.showAlert(
                 title: "Accessibility Permissions Required",
                 message: "You need to enable accessibility permissions for DockDoor to function, click OK to open System Preferences. A restart is required after granting permissions.",
                 actions: [.ok, .cancel],
                 completion: { _ in
                     SystemPreferencesHelper.openAccessibilityPreferences()
-                    askUserToRestartApplication()
                 }
             )
             return
         }
+
+        currentDockPID = dockAppPID
 
         guard let children = try? dockAppElement.children(),
               let axList = children.first(where: { element in
@@ -375,6 +432,8 @@ final class DockObserver {
         if Defaults[.ignoreAppsWithSingleWindow], cachedWindows.count <= 1 {
             cachedWindows = []
         }
+
+        cachedWindows = WindowUtil.collapseNativeTabsIfNeeded(cachedWindows)
 
         // Filter cached windows by current space before showing preview
         if Defaults[.showWindowsFromCurrentSpaceOnly], !cachedWindows.isEmpty {
@@ -761,7 +820,7 @@ final class DockObserver {
     }
 
     private func setupEventTap() {
-        guard eventTap == nil else { return }
+        guard eventTap == nil, DockObserver.canPostEvents else { return }
         var eventMask: CGEventMask = (1 << CGEventType.leftMouseDown.rawValue) |
             (1 << CGEventType.rightMouseDown.rawValue) |
             (1 << CGEventType.otherMouseDown.rawValue)

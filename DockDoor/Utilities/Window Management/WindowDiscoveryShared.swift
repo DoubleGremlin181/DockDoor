@@ -530,6 +530,17 @@ enum WindowSpaces {
         return ids
     }
 
+    /// Mission Control desktop number per Space ID, numbered like the Space
+    /// Switcher's rows (main display first, then left to right). Empty with a
+    /// single desktop, where a badge would say nothing.
+    static func desktopNumbers() -> [Int: Int] {
+        let numbered = SpaceTopology.shared.spaces().displays
+            .flatMap(\.spaces)
+            .filter { $0.desktopNumber > 0 }
+        guard numbered.count > 1 else { return [:] }
+        return Dictionary(numbered.map { (Int($0.id), $0.desktopNumber) }, uniquingKeysWith: { first, _ in first })
+    }
+
     private static func screenContainingMouse(_ mouseLocation: CGPoint) -> NSScreen? {
         NSScreen.screens.first { screen in
             NSPointInRect(mouseLocation, screen.frame)
@@ -821,6 +832,10 @@ func shouldAcceptWindow(axWindow: AXUIElement,
 
     if app.isHidden || axIsFullscreen || axIsMinimized {
         return true
+    }
+
+    if windowSpaces.isEmpty, SLSWindowIsOrderedIn(windowID) == false {
+        return false
     }
 
     // Window on a different Space; a window whose only Spaces no longer exist is a ghost with a stale space ID

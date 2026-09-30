@@ -141,12 +141,19 @@ typealias SLSCopyWindowsWithOptionsAndTagsType = @convention(c) (
     UnsafeMutablePointer<UInt64>
 ) -> Unmanaged<CFArray>?
 
+typealias SLSWindowIsOrderedInType = @convention(c) (
+    CGSConnectionID,
+    CGWindowID,
+    UnsafeMutablePointer<Bool>
+) -> CGError
+
 private var skyLightHandle: UnsafeMutableRawPointer?
 private var setFrontProcessPtr: SLPSSetFrontProcessWithOptionsType?
 private var postEventRecordPtr: SLPSPostEventRecordToType?
 private var managedDisplaySetCurrentSpacePtr: SLSManagedDisplaySetCurrentSpaceType?
 private var managedDisplayIsAnimatingPtr: SLSManagedDisplayIsAnimatingType?
 private var copyWindowsWithOptionsPtr: SLSCopyWindowsWithOptionsAndTagsType?
+private var windowIsOrderedInPtr: SLSWindowIsOrderedInType?
 
 private func loadSkyLightFunctions() {
     guard skyLightHandle == nil else { return }
@@ -165,6 +172,10 @@ private func loadSkyLightFunctions() {
 
     if let symbol = dlsym(handle, "SLPSPostEventRecordTo") {
         postEventRecordPtr = unsafeBitCast(symbol, to: SLPSPostEventRecordToType.self)
+    }
+
+    if let symbol = dlsym(handle, "SLSWindowIsOrderedIn") {
+        windowIsOrderedInPtr = unsafeBitCast(symbol, to: SLSWindowIsOrderedInType.self)
     }
 
     if let symbol = dlsym(handle, "SLSManagedDisplaySetCurrentSpace") {
@@ -223,6 +234,14 @@ func CGSManagedDisplaySetCurrentSpace(_ cid: CGSConnectionID, _ displayIdentifie
     }
     fn(cid, displayIdentifier as CFString, spaceID)
     return true
+}
+
+func SLSWindowIsOrderedIn(_ wid: CGWindowID) -> Bool? {
+    loadSkyLightFunctions()
+    guard let fn = windowIsOrderedInPtr else { return nil }
+    var isOrderedIn = false
+    guard fn(CGSMainConnectionID(), wid, &isOrderedIn) == .success else { return nil }
+    return isOrderedIn
 }
 
 func SLSMoveWindowsToManagedSpace(_ windowIDs: [CGWindowID], _ spaceID: CGSSpaceID) -> Bool {

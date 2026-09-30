@@ -210,6 +210,8 @@ extension Defaults.Keys {
     // MARK: - Glass Effect
 
     static let dockBackgroundStyle = Key<DockBackgroundStyle>("dockBackgroundStyle", default: .liquidGlass)
+    static let dockLiquidGlassFlavor = Key<DockLiquidGlassFlavor>("dockLiquidGlassFlavor", default: .cartouchePopover)
+    static let dockGlassRefraction = Key<Bool>("dockGlassRefraction", default: true)
     static let dockGlassOpacity = Key<CGFloat>("dockGlassOpacity", default: 0.95)
     static let dockGlassBlurRadius = Key<CGFloat>("dockGlassBlurRadius", default: 0)
     static let dockGlassSaturation = Key<CGFloat>("dockGlassSaturation", default: 1.8)
@@ -234,6 +236,7 @@ extension Defaults.Keys {
     static let useMonochromeTrafficLights = Key<Bool>("useMonochromeTrafficLights", default: false)
     static let trafficLightButtonScale = Key<CGFloat>("trafficLightButtonScale", default: 1.0)
     static let showMinimizedHiddenLabels = Key<Bool>("showMinimizedHiddenLabels", default: true)
+    static let showSpaceNumber = Key<Bool>("showSpaceNumber", default: false)
 
     // MARK: - Window Switcher Appearance Settings
 
@@ -314,6 +317,7 @@ extension Defaults.Keys {
     static let activeAppIndicatorOffset = Key<CGFloat>("activeAppIndicatorOffset", default: 5.0)
     static let activeAppIndicatorLength = Key<CGFloat>("activeAppIndicatorLength", default: 40.0)
     static let activeAppIndicatorShift = Key<CGFloat>("activeAppIndicatorShift", default: 0.0)
+    static let activeAppIndicatorStyle = Key<ActiveAppIndicatorStyle>("activeAppIndicatorStyle", default: .bar)
 
     // MARK: - Trackpad Gestures
 
@@ -356,6 +360,20 @@ extension Defaults.Keys {
     static let alternateKeybindKey = Key<UInt16>("alternateKeybindKey", default: 0)
     static let alternateKeybindModifierFlags = Key<Int>("alternateKeybindModifierFlags", default: 0)
     static let alternateKeybindMode = Key<SwitcherInvocationMode>("alternateKeybindMode", default: .activeAppOnly)
+}
+
+enum ActiveAppIndicatorStyle: String, CaseIterable, Defaults.Serializable {
+    case bar
+    case runningAppDots
+
+    var localizedName: String {
+        switch self {
+        case .bar:
+            String(localized: "Line (active app)", comment: "Active app indicator style option")
+        case .runningAppDots:
+            String(localized: "Dots (running apps)", comment: "Active app indicator style option")
+        }
+    }
 }
 
 // MARK: Dock Locking
@@ -1452,4 +1470,24 @@ enum DockBackgroundStyle: String, CaseIterable, Defaults.Serializable {
     static var allAvailable: [DockBackgroundStyle] { allCases }
 
     static var preTahoe: [DockBackgroundStyle] { [.frostedMaterial, .clear] }
+}
+
+enum DockLiquidGlassFlavor: String, CaseIterable, Defaults.Serializable {
+    case dock
+    case controlCenter
+    case notificationCenter
+    case regular
+    case sidebar
+    case widgets
+    case appIcons
+    case avPlayer
+    case monogram
+    case loupe
+    case keyboard
+    case clearGlass
+    case siriSnippet
+    case camera
+    case cartouchePopover
+    case siri
+    case menu
 }

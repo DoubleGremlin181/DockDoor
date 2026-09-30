@@ -24,6 +24,7 @@
 		DBFD0B5445DD4F01BD0FBBAB /* DockDoorPro.swift in Sources */ = {isa = PBXBuildFile; fileRef = F875D112D98340CFAB1BC620 /* DockDoorPro.swift */; };
 		0531F8D22C3CC04600327808 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */; };
 		0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0596C2C22C3E060D00DCABEF /* PrivateApis.swift */; };
+		43F5D8554444436097342131 /* LiquidGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3217C55D219C4BC4A9A00E52 /* LiquidGlass.swift */; };
 		05C0C7182C60629C000ADAC6 /* AXUIElement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05C0C7172C60629C000ADAC6 /* AXUIElement.swift */; };
 		0669C19810724062AE9BBBFEF72C6CCC /* SettingsSearchCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A669E7D8E433434AB00E292C6BC49062 /* SettingsSearchCatalog.swift */; };
 		0BBE0D8202DA47F4940C1E96 /* DockScrollGestureSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08FF50AD1AA8499F8C7E2A7E /* DockScrollGestureSection.swift */; };
@@ -217,6 +218,7 @@
 		BBDF65732E7E212400DD6D6D /* DockObserver+CmdTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBDF65722E7E212400DD6D6D /* DockObserver+CmdTab.swift */; };
 		BBE033CC2DD92061006417B0 /* CGimage.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE033CB2DD92061006417B0 /* CGimage.swift */; };
 		BBE153BE2D2126D000CD3D4A /* MaterialPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE153BD2D2126C000CD3D4A /* MaterialPill.swift */; };
+		F82110F132814AA8AC4EE3A5 /* SpaceNumberBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96D316D0A01F46DBB5945B3E /* SpaceNumberBadge.swift */; };
 		BBE153C02D21FA2700CD3D4A /* StyledGroupBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE153BF2D21FA2300CD3D4A /* StyledGroupBox.swift */; };
 		BBE153C22D22024F00CD3D4A /* View.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE153C12D22024E00CD3D4A /* View.swift */; };
 		BBE63DFF2DEA583C0079D2B9 /* PreviewStateCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBE63DFE2DEA58040079D2B9 /* PreviewStateCoordinator.swift */; };
@@ -290,6 +292,7 @@
 		033B1F63CB464113ADA3868696F486CF /* WindowlessAppPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowlessAppPreview.swift; sourceTree = "<group>"; };
 		0531F8D12C3CC04600327808 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsView.swift; sourceTree = "<group>"; };
 		0596C2C22C3E060D00DCABEF /* PrivateApis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateApis.swift; sourceTree = "<group>"; };
+		3217C55D219C4BC4A9A00E52 /* LiquidGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlass.swift; sourceTree = "<group>"; };
 		05C0C7172C60629C000ADAC6 /* AXUIElement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AXUIElement.swift; sourceTree = "<group>"; };
 		08FF50AD1AA8499F8C7E2A7E /* DockScrollGestureSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockScrollGestureSection.swift; sourceTree = "<group>"; };
 		0970FA03935B41E59919A618 /* SettingsSliderRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSliderRow.swift; sourceTree = "<group>"; };
@@ -480,6 +483,7 @@
 		BBDF65722E7E212400DD6D6D /* DockObserver+CmdTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DockObserver+CmdTab.swift"; sourceTree = "<group>"; };
 		BBE033CB2DD92061006417B0 /* CGimage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGimage.swift; sourceTree = "<group>"; };
 		BBE153BD2D2126C000CD3D4A /* MaterialPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialPill.swift; sourceTree = "<group>"; };
+		96D316D0A01F46DBB5945B3E /* SpaceNumberBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceNumberBadge.swift; sourceTree = "<group>"; };
 		BBE153BF2D21FA2300CD3D4A /* StyledGroupBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyledGroupBox.swift; sourceTree = "<group>"; };
 		BBE153C12D22024E00CD3D4A /* View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = View.swift; sourceTree = "<group>"; };
 		BBE63DFE2DEA58040079D2B9 /* PreviewStateCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewStateCoordinator.swift; sourceTree = "<group>"; };
@@ -584,6 +588,7 @@
 				BB6D81952DF75CA100DB64E4 /* SimpleProgressBar.swift */,
 				3A105FD82C1C049E0015EC66 /* dockStyle.swift */,
 				BBE153BD2D2126C000CD3D4A /* MaterialPill.swift */,
+				96D316D0A01F46DBB5945B3E /* SpaceNumberBadge.swift */,
 				BBE153BF2D21FA2300CD3D4A /* StyledGroupBox.swift */,
 				BBE692182D17AD9C0093B4A5 /* DangerButton.swift */,
 				7FD74FFBE5824DE3919DDDD461D39E30 /* KeyCaptureButton.swift */,
@@ -804,6 +809,7 @@
 				BBAC6B412D15F71E00A0F370 /* Window Management */,
 				BB44474E2C507F920047EB92 /* LimitedTaskGroup.swift */,
 				0596C2C22C3E060D00DCABEF /* PrivateApis.swift */,
+				3217C55D219C4BC4A9A00E52 /* LiquidGlass.swift */,
 				BB2567C52C10C5F000C0C93E /* DockUtils.swift */,
 				BB157B7A2C0E343000997315 /* SystemPreferencesHelper.swift */,
 				BB157B7F2C0E8E6700997315 /* MessageUtil.swift */,
@@ -1256,6 +1262,7 @@
 				BBB6C5342DF3C8B4009E93C4 /* BaseHoverContainer.swift in Sources */,
 				BB638F182E0218C90010077D /* CalendarView.swift in Sources */,
 				BBE153BE2D2126D000CD3D4A /* MaterialPill.swift in Sources */,
+				F82110F132814AA8AC4EE3A5 /* SpaceNumberBadge.swift in Sources */,
 				BB638F0C2E0217480010077D /* MediaLyricsView.swift in Sources */,
 				BB6CAB7F2EB3F0020080E537 /* SettingsView.swift in Sources */,
 				BB638F222E0218F40010077D /* CalendarSkeleton.swift in Sources */,
@@ -1367,6 +1374,7 @@
 				BBF6C6252C1B4B4500BF1D40 /* StringMatchingUtil.swift in Sources */,
 				BB638F1C2E0218D10010077D /* CalendarFullView.swift in Sources */,
 				0596C2C32C3E060D00DCABEF /* PrivateApis.swift in Sources */,
+				43F5D8554444436097342131 /* LiquidGlass.swift in Sources */,
 				BB15E1E22C8E9435002ECFB9 /* FluidGradient.swift in Sources */,
 				BB638F142E0218BB0010077D /* SharedHoverAppTitle.swift in Sources */,
 				8895D7565ED747F8A435CF5E207647C7 /* WidgetHoverContainer.swift in Sources */,
@@ -1469,7 +1477,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 25DV56692Y;
+				DEVELOPMENT_TEAM = 2Q775S63Q3;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ethanbills.DockDoorTests;
@@ -1488,7 +1496,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = 25DV56692Y;
+				DEVELOPMENT_TEAM = 2Q775S63Q3;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ethanbills.DockDoorTests;
