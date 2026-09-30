@@ -352,6 +352,7 @@ final class SpaceSwitchingCoordinator {
         if activationPending {
             activationCancelled = true // Escape or click-outside during the wait
         }
+        guard activationPending || state != nil else { return }
         endSession()
     }
 

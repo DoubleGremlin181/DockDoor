@@ -461,8 +461,9 @@ class KeybindHelper {
         hasProcessedSpaceModifierRelease = false
         spaceSwitcherSessionActive = false
         Task { @MainActor [weak self] in
-            guard let self, spaceSwitchingCoordinator.isSessionActive else { return }
-            spaceSwitchingCoordinator.cancel()
+            // Also covers an activation still waiting on its preview pass, which
+            // would otherwise open the panel after the tap is gone.
+            self?.spaceSwitchingCoordinator.cancel()
         }
         cancelHeldKeyRepeatTask()
     }
