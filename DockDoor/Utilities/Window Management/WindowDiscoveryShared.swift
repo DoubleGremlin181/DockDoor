@@ -532,7 +532,9 @@ enum WindowSpaces {
 
     /// Mission Control desktop number per Space ID, numbered like the Space
     /// Switcher's rows (main display first, then left to right). Empty with a
-    /// single desktop, where a badge would say nothing.
+    /// single desktop, where a badge would say nothing. Main thread only: the
+    /// topology tables are NSScreen-backed, unlike allManagedSpaceIDs above.
+    @MainActor
     static func desktopNumbers() -> [Int: Int] {
         let numbered = SpaceTopology.shared.spaces().displays
             .flatMap(\.spaces)
