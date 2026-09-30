@@ -1,0 +1,38 @@
+name: Fork Release
+on:
+  push:
+    branches: [space-switcher]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'DoubleGremlin181/DockDoor'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream main and release tags
+        run: git fetch --no-tags https://github.com/ejbills/DockDoor.git '+refs/heads/main:refs/remotes/upstream/main' '+refs/tags/*:refs/tags/*'
+
+      - name: Build, sign and publish
+        env:
+          PUBLISH: 1
+          GH_TOKEN: ${{ github.token }}
+          SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SIGNING_CERT_P12" ] || [ -z "$SIGNING_CERT_PASSWORD" ] || [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::Set the SIGNING_CERT_P12, SIGNING_CERT_PASSWORD and SPARKLE_PRIVATE_KEY repository secrets."
+            exit 1
+          fi
+          .github/fork-release/release.sh
