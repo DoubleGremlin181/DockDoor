@@ -28,6 +28,43 @@ Effortless Alt+Tab switching and dock previews that respect your privacy.
 
 </div>
 
+> [!NOTE]
+> **This is [DoubleGremlin181](https://github.com/DoubleGremlin181)'s fork of [DockDoor](https://github.com/ejbills/DockDoor).** It adds a [Space Switcher](#space-switcher) and [per-display desktop memory](#remember-desktop-layouts-per-display) on top of upstream, which it tracks. The sections from [About The Project](#about-the-project) down are upstream's README.
+
+## This Fork
+
+### Install
+
+With Homebrew:
+
+```sh
+brew install --cask doublegremlin181/tap/dockdoor-fork
+```
+
+Or download [DockDoor.dmg](https://github.com/DoubleGremlin181/DockDoor/releases/latest/download/DockDoor.dmg) from the [latest release](https://github.com/DoubleGremlin181/DockDoor/releases/latest) and drag DockDoor into Applications.
+
+The fork is signed but not notarized, so macOS blocks the first launch. Open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**, then grant Accessibility and Screen Recording when asked. After that DockDoor updates itself from this fork's releases.
+
+The fork has its own bundle ID (`io.github.doublegremlin181.DockDoor`), so its settings and permissions are separate from upstream DockDoor and it never updates to an upstream build. Quit upstream DockDoor before using it, since both hook the Dock and the same shortcuts.
+
+Versions look like `1.40.1-fork.3`: the upstream release the build is based on, then a count of fork releases on that base. Each release's notes link the exact upstream commit.
+
+### Space Switcher
+
+Press **Option+Tab** to see every Space on every display, each with a preview of its windows. Keep holding Option and tap Tab to move through them, then release to switch. The switch lands directly on the chosen Space, even several desktops away, without animating through the ones in between.
+
+- **Preview styles:** Mini desktop (window thumbnails at their real positions), Exploded (spread out like Mission Control) or Window list (compact rows).
+- **Move windows between Spaces:** press **M** to send the active window to the selected Space, or drag windows onto another Space while the switcher is open.
+- **Multiple displays:** one row per display with Mission Control's desktop numbering and optional display names. Rows can be ordered main display first, left to right, top to bottom, or by the display with the mouse or active window. The switcher opens on the screen with the mouse, the one with the active window, or a pinned screen.
+- **Stay open:** turn off **Release initializer key to switch Space** to keep the switcher open after releasing the shortcut. Navigate with the arrow keys and confirm with the selection key or a click.
+- **Also:** start on the next Space, move the cursor to the selected display after switching, adjust card width and Space labels, and change the shortcut. Shortcuts that clash with the Window Switcher are detected.
+
+It's off by default: turn it on in **Settings › Space Switcher**. Shortcuts live under **Settings › Gestures & Keybinds**.
+
+### Remember desktop layouts per display
+
+When a display is unplugged, macOS piles its windows onto the remaining display. With this on, DockDoor keeps the unplugged display's desktops apart and moves each window back to its original display and desktop when the display returns. Only windows the Space Switcher has seen are remembered, and desktops are never created or removed. It needs **Displays have separate Spaces** (System Settings › Desktop & Dock) and lives under **Settings › Space Switcher › Display memory**.
+
 ![Screenshot](/resources/dockdoorHero.png)
 
 ## Table of Contents

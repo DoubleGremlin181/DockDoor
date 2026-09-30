@@ -2,6 +2,7 @@ name: Fork Release
 on:
   push:
     branches: [space-switcher]
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 concurrency:

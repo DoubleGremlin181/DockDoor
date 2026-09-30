@@ -127,7 +127,7 @@ upstream_line+=" (ejbills/DockDoor@${upstream_sha:0:7})."
     ((change_count > 40)) && echo "- …and $((change_count - 40)) more"
     echo
     echo "## Install"
-    echo "1. Download **DockDoor.dmg** below and drag DockDoor into Applications."
+    echo "1. Run \`brew install --cask doublegremlin181/tap/dockdoor-fork\`, or download **DockDoor.dmg** below and drag DockDoor into Applications."
     echo "2. Open it. macOS says it can't verify the app: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**."
     echo "3. Grant Accessibility and Screen Recording when asked."
     echo
