@@ -15,11 +15,16 @@ permissions:
 jobs:
   release:
     if: github.repository == 'DoubleGremlin181/DockDoor'
-    runs-on: macos-26
+    # Upstream's Liquid Glass links private SwiftUI symbols that only the macOS 27 SDK
+    # exports; the macos-26 image still defaults to Xcode 26.x.
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Show toolchain
+        run: xcodebuild -version && xcrun --show-sdk-version
 
       - name: Fetch upstream main and release tags
         run: git fetch --no-tags https://github.com/ejbills/DockDoor.git '+refs/heads/main:refs/remotes/upstream/main' '+refs/tags/*:refs/tags/*'
