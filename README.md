@@ -41,9 +41,19 @@ With Homebrew:
 brew install --cask doublegremlin181/tap/dockdoor-fork
 ```
 
-Or download [DockDoor.dmg](https://github.com/DoubleGremlin181/DockDoor/releases/latest/download/DockDoor.dmg) from the [latest release](https://github.com/DoubleGremlin181/DockDoor/releases/latest) and drag DockDoor into Applications.
+Or with the install script, which downloads the latest release, checks that it's signed by this fork, and installs and opens it:
 
-The fork is signed but not notarized, so macOS blocks the first launch. Open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**, then grant Accessibility and Screen Recording when asked. After that DockDoor updates itself from this fork's releases.
+```sh
+curl -fsSL https://raw.githubusercontent.com/DoubleGremlin181/DockDoor/HEAD/install.sh | bash
+```
+
+Grant Accessibility and Screen Recording when DockDoor asks. After that it updates itself from this fork's releases.
+
+The fork is signed with a free developer certificate but not notarized, since notarization needs Apple's paid Developer Program. Homebrew and the script clear macOS's quarantine flag on DockDoor, so it opens without a warning. If you'd rather install by hand, download [DockDoor.dmg](https://github.com/DoubleGremlin181/DockDoor/releases/latest/download/DockDoor.dmg) from the [latest release](https://github.com/DoubleGremlin181/DockDoor/releases/latest) and drag DockDoor into Applications. Its first launch then shows *Apple could not verify "DockDoor" is free of malware* with only **Move to Trash** and **Done**:
+
+1. Click **Done**.
+2. Open **System Settings › Privacy & Security** and scroll to **Security**, where *"DockDoor" was blocked* has an **Open Anyway** button. Click it and authenticate.
+3. Open DockDoor again and click **Open Anyway** in the dialog.
 
 The fork has its own bundle ID (`io.github.doublegremlin181.DockDoor`), so its settings and permissions are separate from upstream DockDoor and it never updates to an upstream build. Quit upstream DockDoor before using it, since both hook the Dock and the same shortcuts.
 

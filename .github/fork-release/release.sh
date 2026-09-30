@@ -127,11 +127,11 @@ upstream_line+=" (ejbills/DockDoor@${upstream_sha:0:7})."
     ((change_count > 40)) && echo "- …and $((change_count - 40)) more"
     echo
     echo "## Install"
-    echo "1. Run \`brew install --cask doublegremlin181/tap/dockdoor-fork\`, or download **DockDoor.dmg** below and drag DockDoor into Applications."
-    echo "2. Open it. macOS says it can't verify the app: open **System Settings › Privacy & Security**, scroll down and click **Open Anyway**."
-    echo "3. Grant Accessibility and Screen Recording when asked."
+    echo '- Homebrew: `brew install --cask doublegremlin181/tap/dockdoor-fork`'
+    echo "- Script: \`curl -fsSL https://raw.githubusercontent.com/$REPO/HEAD/install.sh | bash\`"
+    echo "- By hand: download **DockDoor.dmg** below and drag DockDoor into Applications. The first launch says Apple could not verify it: click **Done**, then **Open Anyway** under **System Settings › Privacy & Security**, and open DockDoor again."
     echo
-    echo "Later versions install through the app's built-in updater, without step 2."
+    echo "Homebrew and the script skip that warning. Grant Accessibility and Screen Recording when asked; later versions install through the app's built-in updater."
     echo "This fork has its own bundle ID, so it doesn't share settings or permissions with upstream DockDoor."
 } >"$OUT/notes.md"
 
