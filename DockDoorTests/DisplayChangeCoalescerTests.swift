@@ -75,6 +75,46 @@ struct DisplayChangeCoalescerTests {
         #expect(c.handle(.timer, now: at(65), signature: { one }, isBusy: { false }) == [.act(previous: two, current: one)])
     }
 
+    @Test func displayEventsAfterWakeDoNotCutTheSettleShort() {
+        var c = C(initial: one)
+        _ = c.handle(.willSleep, now: at(0), signature: { one }, isBusy: { false })
+        #expect(c.handle(.didWake, now: at(60), signature: { one }, isBusy: { false }) == [.armTimer(C.wakeSettle)])
+        // The display hot-plugs half a second into the wake, while apps are still thawing.
+        #expect(c.handle(.beginConfiguration, now: at(60.5), signature: { two }, isBusy: { false }) == [.capturePreChange, .armTimer(C.wakeSettle - 0.5)])
+        #expect(c.handle(.postConfiguration, now: at(61), signature: { two }, isBusy: { false }) == [.armTimer(C.wakeSettle - 1)])
+        // Past the settle period the plain debounce applies again.
+        #expect(c.handle(.screenParametersChanged, now: at(64.5), signature: { two }, isBusy: { false }) == [.armTimer(C.debounce)])
+        #expect(c.handle(.timer, now: at(65.5), signature: { two }, isBusy: { false }) == [.act(previous: one, current: two)])
+    }
+
+    @Test func wakeWithoutSleepStillSettles() {
+        var c = C(initial: one)
+        #expect(c.handle(.didWake, now: at(0), signature: { one }, isBusy: { false }) == [.capturePreChange, .armTimer(C.wakeSettle)])
+        #expect(c.handle(.postConfiguration, now: at(2), signature: { two }, isBusy: { false }) == [.armTimer(C.wakeSettle - 2)])
+    }
+
+    @Test func wakeDuringActionSettlesBeforeTheRequeuedEvaluation() {
+        var c = C(initial: two)
+        _ = c.handle(.beginConfiguration, now: at(0), signature: { two }, isBusy: { false })
+        _ = c.handle(.timer, now: at(3), signature: { one }, isBusy: { false })
+        #expect(c.handle(.didWake, now: at(3.5), signature: { one }, isBusy: { false }) == [])
+        #expect(c.actionFinished(now: at(4), signature: one) == [.armTimer(C.wakeSettle - 0.5)])
+    }
+
+    @Test func wakeWhileWaitingForQuiescenceSettles() {
+        var c = C(initial: two)
+        _ = c.handle(.beginConfiguration, now: at(0), signature: { two }, isBusy: { true })
+        _ = c.handle(.timer, now: at(2.5), signature: { one }, isBusy: { true })
+        #expect(c.handle(.didWake, now: at(3), signature: { one }, isBusy: { true }) == [.armTimer(C.wakeSettle)])
+        #expect(c.phase == .coalescing(since: at(3)))
+    }
+
+    @Test func settleNeverExceedsItsLengthWhenTheClockStepsBack() {
+        var c = C(initial: one)
+        _ = c.handle(.didWake, now: at(100), signature: { one }, isBusy: { false })
+        #expect(c.handle(.postConfiguration, now: at(40), signature: { two }, isBusy: { false }) == [.armTimer(C.wakeSettle)])
+    }
+
     @Test func quietSleepCapturesNothing() {
         var c = C(initial: two)
         _ = c.handle(.willSleep, now: at(0), signature: { two }, isBusy: { false })

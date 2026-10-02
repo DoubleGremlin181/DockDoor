@@ -52,6 +52,9 @@ struct DisplayChangeCoalescer {
     private(set) var hasPreChange = false
     private var changeDuringAction = false
     private var sleepDuringAction = false
+    /// Apps are still thawing right after a wake (their windows cannot be
+    /// reached yet); a burst that follows it is not evaluated before this.
+    private var quietUntil: Date?
 
     init(initial: Signature) {
         lastActed = initial
@@ -60,10 +63,13 @@ struct DisplayChangeCoalescer {
     var isIdle: Bool { phase == .idle }
 
     mutating func handle(_ event: Event, now: Date, signature: () -> Signature, isBusy: () -> Bool) -> [Effect] {
+        if event == .didWake {
+            quietUntil = now.addingTimeInterval(Self.wakeSettle)
+        }
         switch (phase, event) {
         case (.asleep, .didWake):
             phase = .coalescing(since: now)
-            return [.armTimer(Self.wakeSettle)]
+            return [debounceTimer(now: now)]
         case (.asleep, .beginConfiguration), (.asleep, .postConfiguration), (.asleep, .screenParametersChanged):
             // Displays leave while asleep; the switcher's relearn would prune
             // their desktops from the learned map long before wake settles,
@@ -88,7 +94,7 @@ struct DisplayChangeCoalescer {
             // window server has already migrated Spaces by the time the
             // "begin" callback fires, so nothing is gained by waiting for it.
             phase = .coalescing(since: now)
-            return capturePreChangeOnce() + [.armTimer(Self.debounce)]
+            return capturePreChangeOnce() + [debounceTimer(now: now)]
         case (.idle, .timer):
             return []
         case (.cooldown, .timer):
@@ -99,13 +105,13 @@ struct DisplayChangeCoalescer {
             if now.timeIntervalSince(since) >= Self.hardCap {
                 return evaluate(now: now, signature: signature, isBusy: isBusy)
             }
-            return capturePreChangeOnce() + [.armTimer(Self.debounce)]
+            return capturePreChangeOnce() + [debounceTimer(now: now)]
         case (.coalescing, .timer):
             return evaluate(now: now, signature: signature, isBusy: isBusy)
         case (.waitingForQuiescence, .beginConfiguration), (.waitingForQuiescence, .postConfiguration),
              (.waitingForQuiescence, .screenParametersChanged), (.waitingForQuiescence, .didWake):
             phase = .coalescing(since: now)
-            return [.armTimer(Self.debounce)]
+            return [debounceTimer(now: now)]
         case let (.waitingForQuiescence(attempt), .timer):
             if !isBusy() || attempt >= Self.quiescenceLadder.count {
                 return beginAction(signature: signature())
@@ -113,6 +119,11 @@ struct DisplayChangeCoalescer {
             phase = .waitingForQuiescence(attempt: attempt + 1)
             return [.armTimer(Self.quiescenceLadder[attempt])]
         }
+    }
+
+    /// The debounce, stretched to the end of the settle period after a wake
+    private func debounceTimer(now: Date) -> Effect {
+        .armTimer(max(Self.debounce, min(Self.wakeSettle, quietUntil?.timeIntervalSince(now) ?? 0)))
     }
 
     private mutating func capturePreChangeOnce() -> [Effect] {
@@ -134,7 +145,7 @@ struct DisplayChangeCoalescer {
         if changeDuringAction {
             changeDuringAction = false
             phase = .coalescing(since: now)
-            return [.armTimer(Self.debounce)]
+            return [debounceTimer(now: now)]
         }
         phase = .cooldown
         return [.armTimer(Self.cooldown)]
