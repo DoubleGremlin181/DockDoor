@@ -339,6 +339,64 @@ struct DisplayLayoutReconcilerTests {
         #expect(mapped == CGRect(x: 50, y: 25, width: 400, height: 300))
     }
 
+    @Test func mapFrameCarriesAFilledWindowToAFilledWindow() {
+        // Laptop minus its menu bar and Dock, onto an external with neither.
+        let source = CGRect(x: 0, y: 32, width: 1512, height: 860)
+        let target = CGRect(x: 1512, y: 0, width: 1920, height: 1080)
+        #expect(R.mapFrame(source, fromVisible: source, toVisible: target) == target)
+        #expect(R.mapFrame(target, fromVisible: target, toVisible: source) == source)
+    }
+
+    @Test func mapFrameKeepsPlacementWithinTheUsableArea() {
+        let source = CGRect(x: 0, y: 0, width: 1024, height: 768)
+        let target = CGRect(x: 1024, y: 0, width: 2048, height: 1536)
+        let mapped = R.mapFrame(CGRect(x: 512, y: 384, width: 512, height: 384), fromVisible: source, toVisible: target)
+        #expect(mapped == CGRect(x: 2048, y: 768, width: 1024, height: 768), "bottom right quarter stays the bottom right quarter")
+    }
+
+    @Test func mapFrameScalesAnOffsetWindowByANonIntegerFactor() {
+        let source = CGRect(x: 0, y: 32, width: 1512, height: 860)
+        let target = CGRect(x: 1512, y: 0, width: 1920, height: 1080)
+        let mapped = R.mapFrame(CGRect(x: 102, y: 70, width: 1001, height: 662), fromVisible: source, toVisible: target)
+        #expect(target.insetBy(dx: -1, dy: -1).contains(mapped))
+        #expect(abs(mapped.minX - (1512 + 102 * 1920.0 / 1512)) <= 1)
+        #expect(abs(mapped.minY - 38 * 1080.0 / 860) <= 1)
+        #expect(abs(mapped.width - 1001 * 1920.0 / 1512) <= 2)
+        #expect(abs(mapped.height - 662 * 1080.0 / 860) <= 2)
+    }
+
+    @Test func mapFrameWithoutASourceAreaOnlyClamps() {
+        let target = CGRect(x: 1512, y: 0, width: 1920, height: 1080)
+        let frame = CGRect(x: 1600, y: 100, width: 800, height: 600)
+        #expect(R.mapFrame(frame, fromVisible: .zero, toVisible: target) == frame)
+    }
+
+    @Test func windowNewSinceTheUnplugKeepsFillingItsDisplay() {
+        // Window 77 was opened on migrated desktop C and fills the built-in's usable area.
+        let filled = bi.visibleBounds
+        let live = state(displays: [bi, lg], spaces: afterReplug.spaces.map { space in
+            space.uuid == "C" ? self.space(7, uuid: "C", on: "BI", windows: [4, 5, 77]) : space
+        }, windows: allWindows.map { window($0) } + [window(77, frame: filled)])
+        let plan = R.planReconnect(pending: pending, live: live, sessionToken: token)
+        #expect(plan.operations.contains(.setFrame(77, lg.visibleBounds)))
+    }
+
+    @Test func fillingTheCurrentDisplayOutranksTheRememberedFrame() {
+        // Window 1 sat small on the LG, then was filled on the built-in while the LG was away.
+        var withFrames = pending
+        withFrames.frames = [1: CGRect(x: 200, y: 100, width: 640, height: 480)]
+        let live = state(displays: [bi, lg], spaces: afterReplug.spaces, windows: allWindows.map { $0 == 1 ? window($0, frame: bi.visibleBounds) : window($0) })
+        let plan = R.planReconnect(pending: withFrames, live: live, sessionToken: token)
+        #expect(plan.operations.contains(.setFrame(1, lg.visibleBounds)))
+    }
+
+    @Test func fillsAllowsAFewPointsOfSlack() {
+        let area = CGRect(x: 0, y: 32, width: 1512, height: 860)
+        #expect(R.fills(CGRect(x: 0, y: 32, width: 1512, height: 859), area))
+        #expect(!R.fills(CGRect(x: 0, y: 32, width: 1512, height: 800), area))
+        #expect(!R.fills(area, .zero))
+    }
+
     @Test func mapFrameClampsIntoVisibleArea() {
         let bounds = CGRect(x: 0, y: 0, width: 1000, height: 600)
         let visible = CGRect(x: 0, y: 25, width: 1000, height: 500)

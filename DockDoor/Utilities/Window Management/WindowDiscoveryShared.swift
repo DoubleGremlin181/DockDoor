@@ -568,14 +568,27 @@ enum WindowSpaces {
         return move(windowIDs: [windowID], toManagedSpace: targetSpaceID)
     }
 
+    /// Whether moving the window to the Space would take it to another
+    /// display. A window on no known Space counts: following it is harmless.
+    static func crossesDisplays(_ windowID: CGWindowID, to targetSpaceID: CGSSpaceID) -> Bool {
+        let table = SpaceTopology.shared.spaces(maxAge: 1)
+        guard let target = table.displayIdentifier(forSpace: targetSpaceID) else { return false }
+        let current = Set(windowID.cgsSpaces().compactMap { table.displayIdentifier(forSpace: $0) })
+        return !current.contains(target)
+    }
+
     /// Batched move; the target must be a managed space on some display.
+    /// Windows that change display get their frame synced with their app
+    /// afterwards (see `WindowFrameSync`) unless the caller does that itself.
     @discardableResult
-    static func move(windowIDs: [CGWindowID], toManagedSpace targetSpaceID: CGSSpaceID) -> Bool {
+    static func move(windowIDs: [CGWindowID], toManagedSpace targetSpaceID: CGSSpaceID, followFrames: Bool = true) -> Bool {
         guard !windowIDs.isEmpty else { return true }
         guard SpaceTopology.shared.spaces(maxAge: 1).knownSpaceIDs.contains(targetSpaceID) else {
             DebugLogger.log("WindowSpaces.move", details: "Target Space \(targetSpaceID) not found")
             return false
         }
+        let crossing = followFrames ? windowIDs.filter { crossesDisplays($0, to: targetSpaceID) } : []
+        let before = Dictionary(crossing.compactMap { id in WindowFrameSync.serverFrame(of: id).map { (id, $0) } }, uniquingKeysWith: { first, _ in first })
         let moved = SLSMoveWindowsToManagedSpace(windowIDs, targetSpaceID)
         if moved {
             // The window server applies the move asynchronously (measured well
@@ -586,6 +599,12 @@ enum WindowSpaces {
                 usleep(5000)
             }
             SpaceTopology.shared.invalidateMembership()
+            for windowID in crossing {
+                let frame = before[windowID]
+                Task.detached(priority: .userInitiated) {
+                    await WindowFrameSync.follow(windowID, before: frame)
+                }
+            }
         }
         return moved
     }

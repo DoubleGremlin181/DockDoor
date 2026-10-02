@@ -65,8 +65,9 @@ final class DisplayLayoutMemory {
             learnedAtChange = nil
             framesAtChange = nil
             tableAtChange = nil
-            // The table could not be updated while the burst was in flight.
-            note(spaces: SpaceTopology.shared.spaces().displays, frames: [:])
+            // Nothing could be noted while the burst was in flight.
+            SpaceSwitcherEngine.learnVisibleWindows(force: true)
+            Task.detached(priority: .utility) { await WindowFrameSync.heal() }
         }
         observer.start()
         self.observer = observer
@@ -78,6 +79,7 @@ final class DisplayLayoutMemory {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard let self, !Task.isCancelled else { return }
             await restoreNow()
+            await WindowFrameSync.heal()
         }
     }
 
@@ -288,9 +290,12 @@ final class DisplayLayoutMemory {
 
     // MARK: - Execution
 
-    /// Runs operations in order; returns the windows actually moved.
+    /// Moves the windows, then brings each app in line with where its window
+    /// now is; returns the windows actually moved.
     private func execute(_ operations: [DisplayLayoutReconciler.Operation]) async -> Set<CGWindowID> {
         var moved: Set<CGWindowID> = []
+        var crossed: Set<CGWindowID> = []
+        var planned: [CGWindowID: CGRect] = [:]
         let cid = CGSMainConnectionID()
         for operation in operations {
             if Task.isCancelled { break }
@@ -299,58 +304,29 @@ final class DisplayLayoutMemory {
                 let onTarget = Set(CGSCopyWindowsForSpace(cid, target))
                 let needed = ids.filter { !onTarget.contains($0) }
                 guard !needed.isEmpty else { continue }
-                if WindowSpaces.move(windowIDs: needed, toManagedSpace: target) {
+                let crossing = needed.filter { WindowSpaces.crossesDisplays($0, to: target) }
+                if WindowSpaces.move(windowIDs: needed, toManagedSpace: target, followFrames: false) {
                     moved.formUnion(needed)
+                    crossed.formUnion(crossing)
                 } else {
                     DebugLogger.log("DisplayLayoutMemory", details: "move of \(needed) to space \(target) failed")
                 }
                 try? await Task.sleep(nanoseconds: Self.moveSettle)
             case let .setFrame(id, frame):
-                await setFrame(of: id, to: frame)
+                planned[id] = frame
             }
         }
+
+        // Detached so a cancelled restore still finishes what its moves began:
+        // a moved window whose app was never told is worse than no restore.
+        let follows = Set(planned.keys).union(crossed).map { id in
+            let frame = planned[id]
+            return Task.detached(priority: .userInitiated) { await WindowFrameSync.follow(id, planned: frame) }
+        }
+        for follow in follows {
+            _ = await follow.value
+        }
         return moved
-    }
-
-    private func setFrame(of windowID: CGWindowID, to frame: CGRect) async {
-        if let current = currentFrame(of: windowID),
-           abs(current.minX - frame.minX) <= 2, abs(current.minY - frame.minY) <= 2,
-           abs(current.width - frame.width) <= 2, abs(current.height - frame.height) <= 2
-        {
-            return
-        }
-        guard let element = await axElement(for: windowID) else {
-            DebugLogger.log("DisplayLayoutMemory", details: "no AX element for window \(windowID); frame not restored")
-            return
-        }
-        guard let position = AXValue.from(point: frame.origin), let size = AXValue.from(size: frame.size) else { return }
-        // Off the main actor: an unresponsive app holds each set for the AX
-        // timeout. Position twice: apps clamp the first move to the old
-        // display's bounds until the size fits, then accept the final position.
-        await Task.detached(priority: .userInitiated) {
-            try? element.setAttribute(kAXPositionAttribute, position)
-            try? element.setAttribute(kAXSizeAttribute, size)
-            try? element.setAttribute(kAXPositionAttribute, position)
-        }.value
-    }
-
-    private func currentFrame(of windowID: CGWindowID) -> CGRect? {
-        guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: AnyObject]] else { return nil }
-        return CGRect(cgWindowBounds: list.first?[kCGWindowBounds as String])
-    }
-
-    private func axElement(for windowID: CGWindowID) async -> AXUIElement? {
-        if let info = WindowUtil.cachedWindowsUnfiltered().first(where: { $0.id == windowID }) {
-            return info.axElement
-        }
-        guard let list = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: AnyObject]],
-              let pid = (list.first?[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
-        else { return nil }
-        let app = AXUIElementCreateApplication(pid_t(pid))
-        return await Task.detached(priority: .userInitiated) { () -> AXUIElement? in
-            guard let windows = try? app.attribute(kAXWindowsAttribute, [AXUIElement].self) else { return nil }
-            return windows.first { (try? $0.cgWindowId()) == windowID }
-        }.value
     }
 
     /// Keeps the learned map and the window cache consistent with the moves

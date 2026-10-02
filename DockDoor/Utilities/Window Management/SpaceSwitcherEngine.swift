@@ -108,15 +108,15 @@ enum SpaceSwitcherEngine {
     /// Spaces too, so windows opened on other desktops are covered), notes
     /// the onscreen windows' frames, and prunes entries that reference
     /// deleted Spaces. Skipped when a model build already learned this
-    /// generation.
+    /// generation, unless forced.
     @MainActor
-    static func learnVisibleWindows() {
+    static func learnVisibleWindows(force: Bool = false) {
         let table = SpaceTopology.shared.spaces()
         let knownSpaceIDs = table.knownSpaceIDs
         guard !knownSpaceIDs.isEmpty else { return }
 
         var frames: [CGWindowID: CGRect] = [:]
-        if lastModelSpaceGeneration != table.generation {
+        if force || lastModelSpaceGeneration != table.generation {
             let membership = SpaceTopology.shared.membership(maxAge: 1)
             for (wid, spaces) in membership.spacesByWindow {
                 let fresh = spaces.intersection(knownSpaceIDs)

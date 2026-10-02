@@ -211,13 +211,16 @@ enum DisplayLayoutReconciler {
             for wid in toMove {
                 moves[wid] = targetSpace.id
                 guard let window = live.windows[wid] else { continue }
-                if let remembered = pending.frames[wid] {
+                let source = live.space(containing: wid).flatMap { live.displays[$0.displayKey] }
+                if let source, fills(window.frame, source.usableBounds) {
+                    // Filling the display it is on now outranks where it sat before.
+                    operations.append(.setFrame(wid, target.usableBounds))
+                } else if let remembered = pending.frames[wid] {
                     // Where it sat on this display before the unplug.
                     operations.append(.setFrame(wid, mapFrame(remembered, from: pending.record.identity.pointSize, to: target.bounds, visible: target.visibleBounds)))
-                } else if let sourceKey = live.space(containing: wid)?.displayKey, let source = live.displays[sourceKey] {
+                } else if let source {
                     // New since the unplug: keep its relative placement.
-                    let relative = window.frame.offsetBy(dx: -source.bounds.minX, dy: -source.bounds.minY)
-                    operations.append(.setFrame(wid, mapFrame(relative, from: source.bounds.size, to: target.bounds, visible: target.visibleBounds)))
+                    operations.append(.setFrame(wid, mapFrame(window.frame, fromVisible: source.usableBounds, toVisible: target.usableBounds)))
                 }
             }
         }
@@ -240,8 +243,35 @@ enum DisplayLayoutReconciler {
             frame = relative
         }
         frame = frame.offsetBy(dx: bounds.minX, dy: bounds.minY)
+        return clamp(frame, into: visible.isEmpty ? bounds : visible)
+    }
 
-        let visible = visible.isEmpty ? bounds : visible
+    /// Carries a frame from one display's usable area (no menu bar or Dock)
+    /// to another's, keeping its relative placement and its share of the
+    /// area, so a window that fills the first fills the second. All CG global
+    /// coordinates.
+    static func mapFrame(_ frame: CGRect, fromVisible source: CGRect, toVisible target: CGRect) -> CGRect {
+        guard source.width > 0, source.height > 0 else { return clamp(frame, into: target) }
+        let sx = target.width / source.width
+        let sy = target.height / source.height
+        let mapped = CGRect(
+            x: target.minX + (frame.minX - source.minX) * sx,
+            y: target.minY + (frame.minY - source.minY) * sy,
+            width: frame.width * sx,
+            height: frame.height * sy
+        )
+        return clamp(mapped, into: target)
+    }
+
+    /// Covers a display's whole usable area, as "Fill" and zoom leave a window
+    static func fills(_ frame: CGRect, _ area: CGRect) -> Bool {
+        let slack: CGFloat = 4
+        return !area.isEmpty && abs(frame.minX - area.minX) <= slack && abs(frame.minY - area.minY) <= slack
+            && abs(frame.width - area.width) <= slack && abs(frame.height - area.height) <= slack
+    }
+
+    private static func clamp(_ frame: CGRect, into visible: CGRect) -> CGRect {
+        var frame = frame
         frame.size.width = min(frame.width, visible.width)
         frame.size.height = min(frame.height, visible.height)
         let grab = min(80, frame.width)

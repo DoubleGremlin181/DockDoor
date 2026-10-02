@@ -73,6 +73,10 @@ final class SpaceTopology: @unchecked Sendable {
         func display(for identifier: String) -> DisplaySpaces? {
             displays.first { $0.identifier == identifier }
         }
+
+        func displayIdentifier(forSpace id: CGSSpaceID) -> String? {
+            displays.first { $0.spaces.contains { $0.id == id } }?.identifier
+        }
     }
 
     /// Window membership per Space from the window server — the expensive

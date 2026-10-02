@@ -135,6 +135,8 @@ struct LiveDisplay: Hashable {
     /// CG global coordinates, minus menu bar and Dock
     let visibleBounds: CGRect
     let isMain: Bool
+
+    var usableBounds: CGRect { visibleBounds.isEmpty ? bounds : visibleBounds }
 }
 
 struct LiveSpace: Hashable {
