@@ -577,14 +577,35 @@ enum WindowSpaces {
         return !current.contains(target)
     }
 
+    /// The windows a move may take: a window in a fullscreen Space stays
+    /// there with its frame shifted to the other display if moved (measured
+    /// on macOS 26), and nothing can join a fullscreen Space. A window on no
+    /// known Space counts as movable.
+    static func movable(_ windowIDs: [CGWindowID], to targetSpaceID: CGSSpaceID, spacesOf: (CGWindowID) -> [CGSSpaceID], fullscreenSpaceIDs: Set<CGSSpaceID>) -> [CGWindowID] {
+        guard !fullscreenSpaceIDs.contains(targetSpaceID) else { return [] }
+        return windowIDs.filter { id in !spacesOf(id).contains { fullscreenSpaceIDs.contains($0) } }
+    }
+
+    static func movable(_ windowIDs: [CGWindowID], to targetSpaceID: CGSSpaceID) -> [CGWindowID] {
+        movable(windowIDs, to: targetSpaceID, spacesOf: { $0.cgsSpaces() }, fullscreenSpaceIDs: SpaceTopology.shared.spaces(maxAge: 1).fullscreenSpaceIDs)
+    }
+
     /// Batched move; the target must be a managed space on some display.
     /// Windows that change display get their frame synced with their app
     /// afterwards (see `WindowFrameSync`) unless the caller does that itself.
+    /// Fullscreen windows, and any window bound for a fullscreen Space, are
+    /// refused; false when nothing could be moved.
     @discardableResult
     static func move(windowIDs: [CGWindowID], toManagedSpace targetSpaceID: CGSSpaceID, followFrames: Bool = true) -> Bool {
         guard !windowIDs.isEmpty else { return true }
-        guard SpaceTopology.shared.spaces(maxAge: 1).knownSpaceIDs.contains(targetSpaceID) else {
+        let table = SpaceTopology.shared.spaces(maxAge: 1)
+        guard table.knownSpaceIDs.contains(targetSpaceID) else {
             DebugLogger.log("WindowSpaces.move", details: "Target Space \(targetSpaceID) not found")
+            return false
+        }
+        let windowIDs = movable(windowIDs, to: targetSpaceID, spacesOf: { $0.cgsSpaces() }, fullscreenSpaceIDs: table.fullscreenSpaceIDs)
+        guard !windowIDs.isEmpty else {
+            DebugLogger.log("WindowSpaces.move", details: "refused: fullscreen window or fullscreen target Space \(targetSpaceID)")
             return false
         }
         let crossing = followFrames ? windowIDs.filter { crossesDisplays($0, to: targetSpaceID) } : []
@@ -599,10 +620,15 @@ enum WindowSpaces {
                 usleep(5000)
             }
             SpaceTopology.shared.invalidateMembership()
+            // The operation reports no failure of its own; the follow checks
+            // the window is on the target Space before touching its frame.
+            if windowIDs.contains(where: { !$0.cgsSpaces().contains(targetSpaceID) }) {
+                DebugLogger.log("WindowSpaces.move", details: "window server has not confirmed the move to Space \(targetSpaceID) yet")
+            }
             for windowID in crossing {
                 let frame = before[windowID]
                 Task.detached(priority: .userInitiated) {
-                    await WindowFrameSync.follow(windowID, before: frame)
+                    await WindowFrameSync.follow(windowID, before: frame, target: targetSpaceID)
                 }
             }
         }

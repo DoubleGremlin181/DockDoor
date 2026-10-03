@@ -77,6 +77,10 @@ final class SpaceTopology: @unchecked Sendable {
         func displayIdentifier(forSpace id: CGSSpaceID) -> String? {
             displays.first { $0.spaces.contains { $0.id == id } }?.identifier
         }
+
+        var fullscreenSpaceIDs: Set<CGSSpaceID> {
+            Set(displays.flatMap(\.spaces).filter(\.isFullscreen).map(\.id))
+        }
     }
 
     /// Window membership per Space from the window server — the expensive

@@ -72,6 +72,22 @@ struct WindowFrameSyncTests {
         #expect(wide == CGRect(x: 0, y: 200, width: 1512, height: 500))
     }
 
+    @Test func namedTargetDisplayBeatsTheOverlapGuess() {
+        // A 2560-wide fill dropped at the laptop's origin still overlaps the external more.
+        let wideDisplay = CGRect(x: 1512, y: 0, width: 2560, height: 1440)
+        let wideAreas = [S.DisplayArea(bounds: laptopDisplay, usable: laptop, displayID: 1), S.DisplayArea(bounds: wideDisplay, usable: wideDisplay, displayID: 2)]
+        let landed = CGRect(x: 0, y: 0, width: 2560, height: 1440)
+        #expect(S.arrival(before: wideDisplay, server: landed, areas: wideAreas) == laptop, "without a target the origin decides, not the overlap")
+        #expect(S.arrival(before: wideDisplay, server: landed, areas: wideAreas, target: wideAreas[0]) == laptop)
+        // Origin off every display (an 1800-wide window dropped at x = -212): overlap decides.
+        #expect(S.arrival(before: CGRect(x: 1600, y: 40, width: 1800, height: 942), server: CGRect(x: -212, y: 11, width: 1800, height: 942), areas: wideAreas) == laptop)
+        // Not a fill: fitted into the named target.
+        let big = CGRect(x: 1600, y: 100, width: 2000, height: 1200)
+        #expect(S.arrival(before: big, server: CGRect(x: 0, y: 0, width: 2000, height: 1200), areas: wideAreas, target: wideAreas[0]) == laptop)
+        // A target the window is already on: nothing to do.
+        #expect(S.arrival(before: laptop, server: laptop, areas: wideAreas, target: wideAreas[0]) == nil)
+    }
+
     @Test func noArrivalFrameWithoutAChangeOfDisplay() {
         #expect(S.arrival(before: laptop, server: laptop, areas: areas) == nil)
         #expect(S.arrival(before: laptop, server: shifted, areas: []) == nil)

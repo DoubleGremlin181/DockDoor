@@ -53,6 +53,10 @@ struct PendingRestore: Codable, Hashable {
     /// Window → frame relative to the removed display's bounds, as last seen
     /// there by the Space Switcher (CG coordinates, points)
     var frames: [CGWindowID: CGRect] = [:]
+    /// Windows whose remembered frame filled the display's usable area; they
+    /// come back filling it whatever its menu bar and Dock take now. Absent
+    /// in records written before this was tracked.
+    var filledWindows: Set<CGWindowID>?
 }
 
 struct DisplayLayoutStore: Codable {

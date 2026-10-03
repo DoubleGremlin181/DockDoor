@@ -381,13 +381,42 @@ struct DisplayLayoutReconcilerTests {
         #expect(plan.operations.contains(.setFrame(77, lg.visibleBounds)))
     }
 
-    @Test func fillingTheCurrentDisplayOutranksTheRememberedFrame() {
-        // Window 1 sat small on the LG, then was filled on the built-in while the LG was away.
+    @Test func rememberedFrameWinsOverASqueezedFill() {
+        // Window 1 sat small on the LG; while the LG was away it was stretched over the
+        // whole built-in (by macOS squeezing a larger window, or by the user). The
+        // remembered frame is what "restore" means.
         var withFrames = pending
         withFrames.frames = [1: CGRect(x: 200, y: 100, width: 640, height: 480)]
         let live = state(displays: [bi, lg], spaces: afterReplug.spaces, windows: allWindows.map { $0 == 1 ? window($0, frame: bi.visibleBounds) : window($0) })
         let plan = R.planReconnect(pending: withFrames, live: live, sessionToken: token)
+        #expect(plan.operations.contains(.setFrame(1, CGRect(x: 1712, y: 2, width: 640, height: 480))))
+    }
+
+    @Test func rememberedFillComesBackAsAFillWhateverItsSizeNow() {
+        // Window 1 filled the LG; unplugged it was squeezed onto the built-in, then
+        // the user shrank it. It filled the LG, so it fills the LG again.
+        var withFrames = pending
+        withFrames.frames = [1: CGRect(x: 0, y: 20, width: 1920, height: 1040)]
+        withFrames.filledWindows = [1]
+        let live = state(displays: [bi, lg], spaces: afterReplug.spaces, windows: allWindows.map { $0 == 1 ? window($0, frame: CGRect(x: 100, y: 100, width: 800, height: 600)) : window($0) })
+        let plan = R.planReconnect(pending: withFrames, live: live, sessionToken: token)
         #expect(plan.operations.contains(.setFrame(1, lg.visibleBounds)))
+    }
+
+    @Test func disconnectRecordsWhichRememberedWindowsFilled() {
+        let frames: [CGWindowID: CGRect] = [1: CGRect(x: 0, y: 20, width: 1920, height: 1040), 2: CGRect(x: 1, y: 2, width: 3, height: 4)]
+        let plan = R.planDisconnect(record: lgRecord, learned: learned, preexistingSpaceUUIDs: preexisting, after: afterUnplug, useEmptyDesktops: true, frames: frames, filledWindows: [1, 50], sessionToken: token)
+        #expect(plan.pending.filledWindows == [1], "only remembered windows; 50 was never on the LG")
+    }
+
+    @Test func pendingWrittenBeforeFillsWereTrackedDecodes() throws {
+        var old = pending
+        old.frames = [1: CGRect(x: 1, y: 2, width: 3, height: 4)]
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(old)) as! [String: Any]
+        json.removeValue(forKey: "filledWindows")
+        let decoded = try JSONDecoder().decode(PendingRestore.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.filledWindows == nil)
+        #expect(decoded.frames == old.frames)
     }
 
     @Test func fillsAllowsAFewPointsOfSlack() {

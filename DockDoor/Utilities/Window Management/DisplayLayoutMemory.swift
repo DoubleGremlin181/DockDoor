@@ -28,12 +28,14 @@ final class DisplayLayoutMemory {
     /// began — before the switcher's relearn prunes desktops that just died.
     private var learnedAtChange: [CGWindowID: Set<CGSSpaceID>]?
     private var tableAtChange: [String: DisplaySpacesRecord]?
-    /// Window → (display it was on, frame relative to that display), from
-    /// the same passes that feed the learned map. In memory only, so a
-    /// display that returns after a relaunch is restored with relative
-    /// placement; the relevant entries are persisted with a pending restore.
-    private var frames: [CGWindowID: (displayKey: String, relative: CGRect)] = [:]
-    private var framesAtChange: [CGWindowID: (displayKey: String, relative: CGRect)]?
+    /// Window → (display it was on, frame relative to that display, whether
+    /// it filled that display's usable area), from the same passes that feed
+    /// the learned map. In memory only, so a display that returns after a
+    /// relaunch is restored with relative placement; the relevant entries are
+    /// persisted with a pending restore.
+    private typealias NotedFrame = (displayKey: String, relative: CGRect, filled: Bool)
+    private var frames: [CGWindowID: NotedFrame] = [:]
+    private var framesAtChange: [CGWindowID: NotedFrame]?
     private var restoringKeys: Set<String> = []
 
     private init() {
@@ -67,7 +69,6 @@ final class DisplayLayoutMemory {
             tableAtChange = nil
             // Nothing could be noted while the burst was in flight.
             SpaceSwitcherEngine.learnVisibleWindows(force: true)
-            Task.detached(priority: .utility) { await WindowFrameSync.heal() }
         }
         observer.start()
         self.observer = observer
@@ -79,7 +80,6 @@ final class DisplayLayoutMemory {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard let self, !Task.isCancelled else { return }
             await restoreNow()
-            await WindowFrameSync.heal()
         }
     }
 
@@ -127,11 +127,19 @@ final class DisplayLayoutMemory {
             DebugLogger.log("DisplayLayoutMemory", details: "space table: \(describeTable())")
         }
 
+        let primaryHeight = NSScreen.screens.first?.frame.maxY ?? 0
+        var usableByDisplay: [CGDirectDisplayID: CGRect] = [:]
+        for screen in NSScreen.screens {
+            guard let displayID = screen.displayID else { continue }
+            let visible = screen.visibleFrame
+            usableByDisplay[displayID] = CGRect(x: visible.minX, y: primaryHeight - visible.maxY, width: visible.width, height: visible.height)
+        }
         for (wid, frame) in cgFrames {
             guard let probe = table.probe(containing: CGPoint(x: frame.midX, y: frame.midY)),
                   let identity = table.identities[probe.displayID]
             else { continue }
-            frames[wid] = (identity.key, frame.offsetBy(dx: -probe.bounds.minX, dy: -probe.bounds.minY))
+            let usable = usableByDisplay[probe.displayID] ?? probe.bounds
+            frames[wid] = (identity.key, frame.offsetBy(dx: -probe.bounds.minX, dy: -probe.bounds.minY), DisplayLayoutReconciler.fills(frame, usable))
         }
         if frames.count > 2000 {
             let alive = Set(SpaceSwitcherEngine.learnedSnapshot().keys)
@@ -226,13 +234,15 @@ final class DisplayLayoutMemory {
             DebugLogger.log("DisplayLayoutMemory", details: "removed display \(key) has no remembered desktops")
             return
         }
+        let noted = (framesAtChange ?? frames).filter { $0.value.displayKey == key }
         let plan = DisplayLayoutReconciler.planDisconnect(
             record: record,
             learned: learned,
             preexistingSpaceUUIDs: preexistingSpaceUUIDs(excluding: key, table: table),
             after: live,
             useEmptyDesktops: Defaults[.spaceSwitcherKeepUnpluggedDesktopsSeparate],
-            frames: (framesAtChange ?? frames).filter { $0.value.displayKey == key }.mapValues(\.relative),
+            frames: noted.mapValues(\.relative),
+            filledWindows: Set(noted.filter(\.value.filled).keys),
             sessionToken: record.sessionToken
         )
         store.displays[key] = record
@@ -295,6 +305,7 @@ final class DisplayLayoutMemory {
     private func execute(_ operations: [DisplayLayoutReconciler.Operation]) async -> Set<CGWindowID> {
         var moved: Set<CGWindowID> = []
         var crossed: Set<CGWindowID> = []
+        var targets: [CGWindowID: CGSSpaceID] = [:]
         var planned: [CGWindowID: CGRect] = [:]
         let cid = CGSMainConnectionID()
         for operation in operations {
@@ -302,12 +313,15 @@ final class DisplayLayoutMemory {
             switch operation {
             case let .moveWindows(ids, target):
                 let onTarget = Set(CGSCopyWindowsForSpace(cid, target))
-                let needed = ids.filter { !onTarget.contains($0) }
+                let needed = WindowSpaces.movable(ids.filter { !onTarget.contains($0) }, to: target)
                 guard !needed.isEmpty else { continue }
                 let crossing = needed.filter { WindowSpaces.crossesDisplays($0, to: target) }
                 if WindowSpaces.move(windowIDs: needed, toManagedSpace: target, followFrames: false) {
                     moved.formUnion(needed)
                     crossed.formUnion(crossing)
+                    for id in needed {
+                        targets[id] = target
+                    }
                 } else {
                     DebugLogger.log("DisplayLayoutMemory", details: "move of \(needed) to space \(target) failed")
                 }
@@ -319,9 +333,12 @@ final class DisplayLayoutMemory {
 
         // Detached so a cancelled restore still finishes what its moves began:
         // a moved window whose app was never told is worse than no restore.
-        let follows = Set(planned.keys).union(crossed).map { id in
+        // Only windows that were moved: a planned frame for one that stayed
+        // (its move was refused) would drag it to the other display.
+        let follows = Set(planned.keys).union(crossed).filter { targets[$0] != nil }.map { id in
             let frame = planned[id]
-            return Task.detached(priority: .userInitiated) { await WindowFrameSync.follow(id, planned: frame) }
+            let target = targets[id]
+            return Task.detached(priority: .userInitiated) { await WindowFrameSync.follow(id, planned: frame, target: target) }
         }
         for follow in follows {
             _ = await follow.value

@@ -105,6 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Self-gated on its setting; construct it so the Defaults observer is live.
             _ = DisplayLayoutMemory.shared
+            WindowFrameSync.Watcher.shared.start()
 
             if updater.automaticallyChecksForUpdates {
                 print("AppDelegate: Automatic updates enabled, checking in background.")

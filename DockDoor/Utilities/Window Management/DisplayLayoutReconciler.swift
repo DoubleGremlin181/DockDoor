@@ -45,6 +45,7 @@ enum DisplayLayoutReconciler {
         after: LiveState,
         useEmptyDesktops: Bool,
         frames: [CGWindowID: CGRect] = [:],
+        filledWindows: Set<CGWindowID> = [],
         sessionToken: String,
         now: Date = Date()
     ) -> DisconnectPlan {
@@ -120,7 +121,8 @@ enum DisplayLayoutReconciler {
             windowsBySpace: windowsBySpace,
             migrations: migrations,
             preexistingSpaceUUIDs: preexistingSpaceUUIDs,
-            frames: rememberedFrames
+            frames: rememberedFrames,
+            filledWindows: filledWindows.intersection(rememberedFrames.keys)
         )
         return DisconnectPlan(pending: pending, operations: operations, notes: notes)
     }
@@ -212,12 +214,18 @@ enum DisplayLayoutReconciler {
                 moves[wid] = targetSpace.id
                 guard let window = live.windows[wid] else { continue }
                 let source = live.space(containing: wid).flatMap { live.displays[$0.displayKey] }
-                if let source, fills(window.frame, source.usableBounds) {
-                    // Filling the display it is on now outranks where it sat before.
+                if let remembered = pending.frames[wid] {
+                    // Where it sat on this display before the unplug. A fill
+                    // is a fill, not a size: macOS squeezes anything larger
+                    // than the host onto it, so the frame now says nothing.
+                    if pending.filledWindows?.contains(wid) == true {
+                        operations.append(.setFrame(wid, target.usableBounds))
+                    } else {
+                        operations.append(.setFrame(wid, mapFrame(remembered, from: pending.record.identity.pointSize, to: target.bounds, visible: target.visibleBounds)))
+                    }
+                } else if let source, fills(window.frame, source.usableBounds) {
+                    // New since the unplug and filling its display: fill this one.
                     operations.append(.setFrame(wid, target.usableBounds))
-                } else if let remembered = pending.frames[wid] {
-                    // Where it sat on this display before the unplug.
-                    operations.append(.setFrame(wid, mapFrame(remembered, from: pending.record.identity.pointSize, to: target.bounds, visible: target.visibleBounds)))
                 } else if let source {
                     // New since the unplug: keep its relative placement.
                     operations.append(.setFrame(wid, mapFrame(window.frame, fromVisible: source.usableBounds, toVisible: target.usableBounds)))
